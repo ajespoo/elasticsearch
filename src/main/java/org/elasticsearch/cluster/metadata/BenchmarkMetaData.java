@@ -191,12 +191,11 @@ public class BenchmarkMetaData implements MetaData.Custom {
 
         INITIALIZING((byte) 0),
         RUNNING((byte) 1),
-        STARTED((byte) 2),
-        PAUSED((byte) 3),
-        RESUMING((byte) 4),
-        COMPLETED((byte) 5),
-        FAILED((byte) 6),
-        ABORTED((byte) 7);
+        PAUSED((byte) 2),
+        RESUMING((byte) 3),
+        COMPLETED((byte) 4),
+        FAILED((byte) 5),
+        ABORTED((byte) 6);
 
         private static final State[] STATES = new State[State.values().length];
 

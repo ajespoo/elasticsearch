@@ -60,13 +60,12 @@ public final class BenchmarkStateManager {
     private final ThreadPool threadPool;
     private final TransportService transportService;
 
-    private static EnumSet<BenchmarkMetaData.State> PAUSE_ELIGIBLE = EnumSet.of(BenchmarkMetaData.State.RUNNING,
-            BenchmarkMetaData.State.STARTED);
+    private static EnumSet<BenchmarkMetaData.State> PAUSE_ELIGIBLE = EnumSet.of(BenchmarkMetaData.State.RUNNING);
 
     private static final EnumSet<BenchmarkMetaData.State> RESUME_ELIGIBLE = EnumSet.of(BenchmarkMetaData.State.PAUSED);
 
     private static final EnumSet<BenchmarkMetaData.State> ABORT_ELIGIBLE = EnumSet.of(BenchmarkMetaData.State.RUNNING,
-            BenchmarkMetaData.State.STARTED, BenchmarkMetaData.State.PAUSED, BenchmarkMetaData.State.RESUMING);
+            BenchmarkMetaData.State.PAUSED, BenchmarkMetaData.State.RESUMING);
 
 
     @Inject
