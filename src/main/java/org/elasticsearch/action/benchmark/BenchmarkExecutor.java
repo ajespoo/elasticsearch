@@ -175,7 +175,7 @@ public class BenchmarkExecutor {
 
                 final List<CompetitionIteration> competitionIterations = new ArrayList<>(settings.iterations());
                 final CompetitionResult competitionResult =
-                        new CompetitionResult(competitor.name(), settings.concurrency(), settings.multiplier(), request.percentiles());
+                        new CompetitionResult(competitor.name(), settings.concurrency(), settings.multiplier(), request.verbose(), request.percentiles());
                 final CompetitionNodeResult competitionNodeResult =
                         new CompetitionNodeResult(competitor.name(), nodeName(), settings.iterations(), competitionIterations);
 

@@ -53,17 +53,6 @@ public class CompetitionResult implements Streamable, ToXContent {
      * @param competitionName   Competition name
      * @param concurrency       Concurrency
      * @param multiplier        Internal multiplier; each iteration will run this many times to smooth out measurements
-     * @param percentiles       Which percentiles to report on
-     */
-    public CompetitionResult(String competitionName, int concurrency, int multiplier, double[] percentiles) {
-        this(competitionName, concurrency, multiplier, false, percentiles);
-    }
-
-    /**
-     * Constructs a competition result
-     * @param competitionName   Competition name
-     * @param concurrency       Concurrency
-     * @param multiplier        Internal multiplier; each iteration will run this many times to smooth out measurements
      * @param verbose           Whether to report detailed statistics
      * @param percentiles       Which percentiles to report on
      */

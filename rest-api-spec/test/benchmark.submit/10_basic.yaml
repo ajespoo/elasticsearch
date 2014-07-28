@@ -2,8 +2,7 @@
 setup:
 
   - skip:
-      version:  "0 - 2.0.0"
-      reason:   Skip until REST runner can force bench.node=true
+      features: "benchmark"
 
   - do:
       index:

@@ -237,7 +237,7 @@ public class BenchmarkStartResponse extends ActionResponse implements Streamable
             String s = in.readString();
             CompetitionResult cr = new CompetitionResult();
             cr.readFrom(in);
-            cr.verbose(verbose());
+            cr.verbose(verbose);
             competitionResults.put(s, cr);
         }
     }

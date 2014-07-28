@@ -67,7 +67,7 @@ public class BenchmarkStatusResponseListener implements ActionListener<Benchmark
     private void processResponses() {
         try {
             synchronized (responses) {
-                response = consolidate(responses);
+                response = merge(responses);
             }
         } finally {
             complete.countDown();
@@ -93,10 +93,10 @@ public class BenchmarkStatusResponseListener implements ActionListener<Benchmark
     /**
      * Merge node responses into a single consolidated response
      */
-    private BenchmarkStartResponse consolidate(List<BenchmarkStartResponse> responses) {
+    private BenchmarkStartResponse merge(List<BenchmarkStartResponse> responses) {
 
         final BenchmarkStartResponse response = new BenchmarkStartResponse();
-        final List<String> errors             = new ArrayList<>();
+        final List<String> errors = new ArrayList<>();
 
         for (BenchmarkStartResponse r : responses) {
 
@@ -109,7 +109,7 @@ public class BenchmarkStatusResponseListener implements ActionListener<Benchmark
                     response.competitionResults().put(entry.getKey(),
                             new CompetitionResult(
                                     entry.getKey(), entry.getValue().concurrency(), entry.getValue().multiplier(),
-                                    false, entry.getValue().percentiles())
+                                    entry.getValue().verbose(), entry.getValue().percentiles())
                     );
                 }
                 CompetitionResult cr = response.competitionResults().get(entry.getKey());

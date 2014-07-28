@@ -70,8 +70,7 @@ public final class BenchmarkStateManager {
 
 
     @Inject
-    public BenchmarkStateManager(final ClusterService clusterService, final ThreadPool threadPool,
-                                 final TransportService transportService, final BenchmarkUtility utility) {
+    public BenchmarkStateManager(final ClusterService clusterService, final ThreadPool threadPool, final TransportService transportService) {
         this.clusterService = clusterService;
         this.threadPool = threadPool;
         this.transportService = transportService;
