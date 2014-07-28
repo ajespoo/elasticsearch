@@ -47,27 +47,33 @@ import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.TransportService;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Manages cluster metadata state for benchmarks
  */
-public class BenchmarkStateManager {
+public final class BenchmarkStateManager {
 
     private static final ESLogger logger = ESLoggerFactory.getLogger(BenchmarkStateManager.class.getName());
 
-    private final ClusterService   clusterService;
-    private final ThreadPool       threadPool;
+    private final ClusterService clusterService;
+    private final ThreadPool threadPool;
     private final TransportService transportService;
+
+    private static EnumSet<BenchmarkMetaData.State> PAUSE_ELIGIBLE = EnumSet.of(BenchmarkMetaData.State.RUNNING,
+            BenchmarkMetaData.State.STARTED);
+
+    private static final EnumSet<BenchmarkMetaData.State> RESUME_ELIGIBLE = EnumSet.of(BenchmarkMetaData.State.PAUSED);
+
+    private static final EnumSet<BenchmarkMetaData.State> ABORT_ELIGIBLE = EnumSet.of(BenchmarkMetaData.State.RUNNING,
+            BenchmarkMetaData.State.STARTED, BenchmarkMetaData.State.PAUSED, BenchmarkMetaData.State.RESUMING);
+
 
     @Inject
     public BenchmarkStateManager(final ClusterService clusterService, final ThreadPool threadPool,
                                  final TransportService transportService, final BenchmarkUtility utility) {
-        this.clusterService   = clusterService;
-        this.threadPool       = threadPool;
+        this.clusterService = clusterService;
+        this.threadPool = threadPool;
         this.transportService = transportService;
     }
 
@@ -126,26 +132,22 @@ public class BenchmarkStateManager {
         });
     }
 
-    private interface Eligibility {
-        boolean eligible(final BenchmarkMetaData.Entry entry);
-    }
-
     private static class UpdateTask implements TimeoutClusterStateUpdateTask {
 
-        final TimeValue                timeValue;
+        final TimeValue timeValue;
         final ActionListener<String[]> listener;
-        final String[]                 patterns;
-        final Eligibility              eligibility;
-        final BenchmarkMetaData.State  target;
-        final List<String>             found = new ArrayList<>();
+        final String[] patterns;
+        final EnumSet<BenchmarkMetaData.State> eligibilitySet;
+        final BenchmarkMetaData.State target;
+        final List<String> found = new ArrayList<>();
 
         UpdateTask(final String[] patterns, final TimeValue timeValue, final ActionListener<String[]> listener,
-                   final BenchmarkMetaData.State target, final Eligibility eligibility) {
-            this.timeValue   = timeValue;
-            this.patterns    = patterns;
-            this.listener    = listener;
-            this.target      = target;
-            this.eligibility = eligibility;
+                   final BenchmarkMetaData.State target, final EnumSet<BenchmarkMetaData.State> eligibilitySet) {
+            this.timeValue = timeValue;
+            this.patterns = patterns;
+            this.listener = listener;
+            this.target = target;
+            this.eligibilitySet = eligibilitySet;
         }
 
         @Override
@@ -170,7 +172,7 @@ public class BenchmarkStateManager {
 
             for (BenchmarkMetaData.Entry entry : meta.entries()) {
 
-                if (!eligibility.eligible(entry)) {
+                if (!eligibilitySet.contains(entry.state())) {
                     builder.add(entry);
                 } else if (Regex.simpleMatch(patterns, entry.benchmarkId())) {
                     builder.add(new BenchmarkMetaData.Entry(entry.benchmarkId(), target, entry.nodeStateMap()));
@@ -196,22 +198,14 @@ public class BenchmarkStateManager {
         }
     }
 
+
     public void pause(final BenchmarkPauseRequest request, final ActionListener<String[]> listener) {
 
         final String cause = "benchmark-pause-request (" + Joiner.on(",").join(request.benchmarkIdPatterns()) + ")";
 
         clusterService.submitStateUpdateTask(cause,
                 new UpdateTask(request.benchmarkIdPatterns(), request.masterNodeTimeout(), listener,
-                        BenchmarkMetaData.State.PAUSED,
-                        new Eligibility() {
-                            @Override
-                            public boolean eligible(BenchmarkMetaData.Entry entry) {
-                                return !(entry.state() == BenchmarkMetaData.State.INITIALIZING ||
-                                         entry.state() == BenchmarkMetaData.State.COMPLETED ||
-                                         entry.state() == BenchmarkMetaData.State.ABORTED ||
-                                         entry.state() == BenchmarkMetaData.State.FAILED);
-                            }
-                        }));
+                        BenchmarkMetaData.State.PAUSED, PAUSE_ELIGIBLE));
     }
 
     public void resume(final BenchmarkResumeRequest request, final ActionListener<String[]> listener) {
@@ -220,13 +214,7 @@ public class BenchmarkStateManager {
 
         clusterService.submitStateUpdateTask(cause,
                 new UpdateTask(request.benchmarkIdPatterns(), request.masterNodeTimeout(), listener,
-                        BenchmarkMetaData.State.RESUMING,
-                        new Eligibility() {
-                            @Override
-                            public boolean eligible(BenchmarkMetaData.Entry entry) {
-                                return entry.state() == BenchmarkMetaData.State.PAUSED;
-                            }
-                        }));
+                        BenchmarkMetaData.State.RESUMING, RESUME_ELIGIBLE));
     }
 
     public void abort(final BenchmarkAbortRequest request, final ActionListener<String[]> listener) {
@@ -235,15 +223,7 @@ public class BenchmarkStateManager {
 
         clusterService.submitStateUpdateTask(cause,
                 new UpdateTask(request.benchmarkIdPatterns(), request.masterNodeTimeout(), listener,
-                        BenchmarkMetaData.State.ABORTED,
-                        new Eligibility() {
-                            @Override
-                            public boolean eligible(BenchmarkMetaData.Entry entry) {
-                                return !(entry.state() == BenchmarkMetaData.State.COMPLETED ||
-                                         entry.state() == BenchmarkMetaData.State.ABORTED ||
-                                         entry.state() == BenchmarkMetaData.State.FAILED);
-                            }
-                        }));
+                        BenchmarkMetaData.State.ABORTED, ABORT_ELIGIBLE));
     }
 
 

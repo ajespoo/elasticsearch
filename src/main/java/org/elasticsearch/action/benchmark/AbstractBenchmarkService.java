@@ -144,11 +144,6 @@ public abstract class AbstractBenchmarkService<T> extends AbstractLifecycleCompo
 
     /* ** Utilities ** */
 
-    public static interface BenchmarkExecutionListener {
-        void onResponse(BenchmarkStartResponse response);
-        void onFailure(Throwable t);
-    }
-
     protected boolean isMasterNode() {
         return clusterService.state().nodes().localNodeMaster();
     }

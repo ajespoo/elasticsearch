@@ -483,7 +483,7 @@ public class BenchmarkCoordinatorService extends AbstractBenchmarkService<Benchm
 
     /* ** Utilities ** */
 
-    protected class InternalCoordinatorState {
+    protected final class InternalCoordinatorState {
 
         final String                benchmarkId;
         final BenchmarkStartRequest request;

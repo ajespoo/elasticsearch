@@ -20,6 +20,7 @@
 package org.elasticsearch.action.benchmark;
 
 import org.elasticsearch.ElasticsearchException;
+import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.benchmark.start.*;
 import org.elasticsearch.action.benchmark.status.*;
 import org.elasticsearch.action.benchmark.exception.*;
@@ -36,7 +37,8 @@ import java.util.Map;
 
 
 /**
- * Service class for executing benchmarks on designated nodes.
+ * Manages the execution of benchmarks.
+ *
  */
 public class BenchmarkExecutorService extends AbstractBenchmarkService<BenchmarkExecutorService> {
 
@@ -115,9 +117,9 @@ public class BenchmarkExecutorService extends AbstractBenchmarkService<Benchmark
 
                     if (ies.canStartExecution()) {
 
-                        final BenchmarkExecutionListener listener = new BenchmarkExecutionListener() {
+                        final ActionListener<BenchmarkStartResponse> listener = new ActionListener<BenchmarkStartResponse>() {
                             @Override
-                            public void onResponse(final BenchmarkStartResponse response) {
+                            public void onResponse(BenchmarkStartResponse response) {
                                 logger.debug("benchmark [{}]: completed [{}]", response.benchmarkId(), response.state());
                                 updateNodeState(response.benchmarkId(), nodeId(), convertToNodeState(response.state()));
                             }
@@ -366,7 +368,7 @@ public class BenchmarkExecutorService extends AbstractBenchmarkService<Benchmark
         });
     }
 
-    protected class InternalExecutorState {
+    protected static final class InternalExecutorState {
 
         String                 benchmarkId;
         BenchmarkStartRequest  request;
