@@ -20,6 +20,7 @@ package org.elasticsearch.action.benchmark;
 
 import com.google.common.base.Joiner;
 import org.elasticsearch.ElasticsearchException;
+import org.elasticsearch.ElasticsearchIllegalStateException;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.benchmark.abort.*;
 import org.elasticsearch.action.benchmark.pause.*;
@@ -75,7 +76,7 @@ public class BenchmarkCoordinatorService extends AbstractBenchmarkService<Benchm
     @Override
     public void clusterChanged(ClusterChangedEvent event) {
 
-        // XXX - Need to detect dropped node here and remove from internal state where appropriate
+        // NOCOMMIT - Need to detect dropped node here and remove from internal state where appropriate
 
         final BenchmarkMetaData meta = event.state().metaData().custom(BenchmarkMetaData.TYPE);
         final BenchmarkMetaData prev = event.previousState().metaData().custom(BenchmarkMetaData.TYPE);
@@ -136,7 +137,7 @@ public class BenchmarkCoordinatorService extends AbstractBenchmarkService<Benchm
                     break;
                 case FAILED:
 
-                    // XXX - Finish
+                    // NOCOMMIT - Finish
                     throw new UnsupportedOperationException("Unimplemented");
 
                 case ABORTED:
@@ -146,7 +147,7 @@ public class BenchmarkCoordinatorService extends AbstractBenchmarkService<Benchm
                     }
                     break;
                 default:
-                    throw new BenchmarkIllegalStateException("benchmark [" + entry.benchmarkId() + "]: illegal state [" + entry.state() + "]");
+                    throw new ElasticsearchIllegalStateException("benchmark [" + entry.benchmarkId() + "]: illegal state [" + entry.state() + "]");
             }
         }
     }
@@ -231,7 +232,7 @@ public class BenchmarkCoordinatorService extends AbstractBenchmarkService<Benchm
                     for (final String benchmarkId : benchmarkIds) {
                         final InternalCoordinatorState ics = benchmarks.get(benchmarkId);
                         if (ics == null) {
-                            throw new BenchmarkIllegalStateException("benchmark [" + benchmarkId + "]: missing internal state");
+                            throw new ElasticsearchIllegalStateException("benchmark [" + benchmarkId + "]: missing internal state");
                         }
 
                         ics.onPaused = on;
@@ -262,7 +263,7 @@ public class BenchmarkCoordinatorService extends AbstractBenchmarkService<Benchm
                     for (final String benchmarkId : benchmarkIds) {
                         final InternalCoordinatorState ics = benchmarks.get(benchmarkId);
                         if (ics == null) {
-                            throw new BenchmarkIllegalStateException("benchmark [" + benchmarkId + "]: missing internal state");
+                            throw new ElasticsearchIllegalStateException("benchmark [" + benchmarkId + "]: missing internal state");
                         }
 
                         ics.onResumed = new OnResumedStateChangeListener(ics, listener);
@@ -293,7 +294,7 @@ public class BenchmarkCoordinatorService extends AbstractBenchmarkService<Benchm
                     for (final String benchmarkId : benchmarkIds) {
                         final InternalCoordinatorState ics = benchmarks.get(benchmarkId);
                         if (ics == null) {
-                            throw new BenchmarkIllegalStateException("benchmark [" + benchmarkId + "]: missing internal state");
+                            throw new ElasticsearchIllegalStateException("benchmark [" + benchmarkId + "]: missing internal state");
                         }
 
                         ics.onAbort = new OnAbortStateChangeListener(ics, listener);
@@ -310,7 +311,11 @@ public class BenchmarkCoordinatorService extends AbstractBenchmarkService<Benchm
 
     /* ** State Change Listeners ** */
 
-    private class OnReadyStateChangeListener extends StateChangeListener {
+    private interface  StateChangeListener {
+        void onStateChange(BenchmarkMetaData.Entry entry);
+    }
+
+    private class OnReadyStateChangeListener implements StateChangeListener {
 
         final InternalCoordinatorState ics;
 
@@ -319,7 +324,7 @@ public class BenchmarkCoordinatorService extends AbstractBenchmarkService<Benchm
         }
 
         @Override
-        synchronized void onStateChange(final BenchmarkMetaData.Entry entry) {
+        public synchronized void onStateChange(final BenchmarkMetaData.Entry entry) {
 
             manager.update(ics.benchmarkId, BenchmarkMetaData.State.RUNNING, BenchmarkMetaData.Entry.NodeState.RUNNING,
                     new ActionListener() {
@@ -334,7 +339,7 @@ public class BenchmarkCoordinatorService extends AbstractBenchmarkService<Benchm
         }
     }
 
-    private class OnFinishedStateChangeListener extends StateChangeListener {
+    private class OnFinishedStateChangeListener implements StateChangeListener {
 
         final InternalCoordinatorState ics;
 
@@ -343,7 +348,7 @@ public class BenchmarkCoordinatorService extends AbstractBenchmarkService<Benchm
         }
 
         @Override
-        synchronized void onStateChange(final BenchmarkMetaData.Entry entry) {
+        public synchronized void onStateChange(final BenchmarkMetaData.Entry entry) {
 
             try {
                 ics.response = manager.status(entry);
@@ -366,7 +371,7 @@ public class BenchmarkCoordinatorService extends AbstractBenchmarkService<Benchm
         }
     }
 
-    private class OnCompleteStateChangeListener extends StateChangeListener {
+    private class OnCompleteStateChangeListener implements StateChangeListener {
 
         final InternalCoordinatorState ics;
 
@@ -375,7 +380,7 @@ public class BenchmarkCoordinatorService extends AbstractBenchmarkService<Benchm
         }
 
         @Override
-        synchronized void onStateChange(final BenchmarkMetaData.Entry entry) {
+        public synchronized void onStateChange(final BenchmarkMetaData.Entry entry) {
 
              manager.clear(ics.benchmarkId, new ActionListener() {
                 @Override
@@ -393,7 +398,7 @@ public class BenchmarkCoordinatorService extends AbstractBenchmarkService<Benchm
         }
     }
 
-    private class OnAbortStateChangeListener extends StateChangeListener {
+    private class OnAbortStateChangeListener implements StateChangeListener {
 
         final InternalCoordinatorState               ics;
         final ActionListener<BenchmarkAbortResponse> listener;
@@ -404,7 +409,7 @@ public class BenchmarkCoordinatorService extends AbstractBenchmarkService<Benchm
         }
 
         @Override
-        synchronized void onStateChange(BenchmarkMetaData.Entry entry) {
+        public synchronized void onStateChange(BenchmarkMetaData.Entry entry) {
 
             final BenchmarkAbortResponse response = new BenchmarkAbortResponse(entry.benchmarkId());
 
@@ -420,7 +425,7 @@ public class BenchmarkCoordinatorService extends AbstractBenchmarkService<Benchm
         }
     }
 
-    private class OnPausedStateChangeListener extends StateChangeListener {
+    private class OnPausedStateChangeListener implements StateChangeListener {
 
         final CountDown                              countdown;
         final ActionListener<BenchmarkPauseResponse> listener;
@@ -434,7 +439,7 @@ public class BenchmarkCoordinatorService extends AbstractBenchmarkService<Benchm
         }
 
         @Override
-        synchronized void onStateChange(BenchmarkMetaData.Entry entry) {
+        public synchronized void onStateChange(BenchmarkMetaData.Entry entry) {
 
             for (Map.Entry<String, BenchmarkMetaData.Entry.NodeState> e : entry.nodeStateMap().entrySet()) {
                 assert e.getValue() == BenchmarkMetaData.Entry.NodeState.PAUSED;
@@ -447,7 +452,7 @@ public class BenchmarkCoordinatorService extends AbstractBenchmarkService<Benchm
         }
     }
 
-    private class OnResumedStateChangeListener extends StateChangeListener {
+    private class OnResumedStateChangeListener implements StateChangeListener {
 
         final InternalCoordinatorState                ics;
         final ActionListener<BenchmarkResumeResponse> listener;
@@ -458,7 +463,7 @@ public class BenchmarkCoordinatorService extends AbstractBenchmarkService<Benchm
         }
 
         @Override
-        synchronized void onStateChange(BenchmarkMetaData.Entry entry) {
+        public synchronized void onStateChange(BenchmarkMetaData.Entry entry) {
 
             final BenchmarkResumeResponse response = new BenchmarkResumeResponse(entry.benchmarkId());
 
@@ -550,7 +555,7 @@ public class BenchmarkCoordinatorService extends AbstractBenchmarkService<Benchm
                 } else {
                     try {
                         if (response == null) {
-                            listener.onFailure(new BenchmarkIllegalStateException("benchmark [" + benchmarkId + "]: missing response"));
+                            listener.onFailure(new ElasticsearchIllegalStateException("benchmark [" + benchmarkId + "]: missing response"));
                         } else {
                             listener.onResponse(response);
                         }
@@ -651,7 +656,7 @@ public class BenchmarkCoordinatorService extends AbstractBenchmarkService<Benchm
                         new BenchmarkDefinitionActionResponse(benchmarks.get(request.benchmarkId).request, request.nodeId);
                 channel.sendResponse(response);
             } else {
-                channel.sendResponse(new BenchmarkIllegalStateException("benchmark [" + request.benchmarkId + "]: missing internal state"));
+                channel.sendResponse(new ElasticsearchIllegalStateException("benchmark [" + request.benchmarkId + "]: missing internal state"));
             }
         }
 

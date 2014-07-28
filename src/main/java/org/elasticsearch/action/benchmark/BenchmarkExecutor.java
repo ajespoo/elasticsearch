@@ -66,7 +66,7 @@ public class BenchmarkExecutor {
             }
 
             try {
-                state.stopAllCompetitors();
+                state.abortAllCompetitors();
             } catch (Throwable t) {
                 logger.error("benchmark [{}]: failed to abort", t, benchmarkId);
             }

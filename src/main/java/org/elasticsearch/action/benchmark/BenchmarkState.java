@@ -71,6 +71,18 @@ public class BenchmarkState {
         }
     }
 
+    void abortAllCompetitors() {
+        synchronized (lock) {
+            if (!stopped) {
+                for (final StoppableSemaphore semaphore : semaphores.values()) {
+                    semaphore.stop();
+                }
+                response.state(BenchmarkStartResponse.State.ABORTED);
+                stopped = true;
+            }
+        }
+    }
+
     void pauseAllCompetitors() {
         synchronized (lock) {
             if (!paused && !stopped) {

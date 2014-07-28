@@ -19,8 +19,8 @@
 
 package org.elasticsearch.action.benchmark;
 
+import org.elasticsearch.ElasticsearchIllegalStateException;
 import org.elasticsearch.action.benchmark.competition.CompetitionIteration;
-import org.elasticsearch.action.benchmark.exception.BenchmarkIllegalStateException;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.cluster.ClusterService;
@@ -68,7 +68,7 @@ public class MockBenchmarkExecutorService extends BenchmarkExecutorService {
 
         public void addFlowControl(final String benchmarkId, final FlowControl flow) {
             if (flows.containsKey(benchmarkId)) {
-                throw new BenchmarkIllegalStateException("Already have flow control for benchmark: " + benchmarkId);
+                throw new ElasticsearchIllegalStateException("Already have flow control for benchmark: " + benchmarkId);
             }
             flows.put(benchmarkId, flow);
         }

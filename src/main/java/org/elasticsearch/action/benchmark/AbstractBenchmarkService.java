@@ -21,7 +21,7 @@ package org.elasticsearch.action.benchmark;
 
 import com.google.common.collect.ImmutableList;
 
-import org.elasticsearch.action.benchmark.exception.BenchmarkIllegalStateException;
+import org.elasticsearch.ElasticsearchIllegalStateException;
 import org.elasticsearch.action.benchmark.start.BenchmarkStartRequest;
 import org.elasticsearch.action.benchmark.start.BenchmarkStartResponse;
 import org.elasticsearch.cluster.ClusterService;
@@ -175,7 +175,7 @@ public abstract class AbstractBenchmarkService<T> extends AbstractLifecycleCompo
             case ABORTED:
                 return BenchmarkMetaData.Entry.NodeState.ABORTED;
             default:
-                throw new BenchmarkIllegalStateException("unhandled benchmark response state: " + state);
+                throw new ElasticsearchIllegalStateException("unhandled benchmark response state: " + state);
         }
     }
 

@@ -20,10 +20,10 @@
 package org.elasticsearch.action.benchmark;
 
 import org.elasticsearch.ElasticsearchException;
+import org.elasticsearch.ElasticsearchIllegalStateException;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.benchmark.start.*;
 import org.elasticsearch.action.benchmark.status.*;
-import org.elasticsearch.action.benchmark.exception.*;
 import org.elasticsearch.cluster.metadata.BenchmarkMetaData;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.cluster.*;
@@ -208,7 +208,7 @@ public class BenchmarkExecutorService extends AbstractBenchmarkService<Benchmark
                     logger.debug("benchmark [{}]: cleared", entry.benchmarkId());
                     break;
                 default:
-                    throw new BenchmarkIllegalStateException("benchmark [" + entry.benchmarkId() + "]: illegal state [" + entry.state() + "]");
+                    throw new ElasticsearchIllegalStateException("benchmark [" + entry.benchmarkId() + "]: illegal state [" + entry.state() + "]");
             }
         }
     }
@@ -246,7 +246,7 @@ public class BenchmarkExecutorService extends AbstractBenchmarkService<Benchmark
             } catch (Throwable t) {
 
                 logger.error("XXX FAILED TO CREATE BENCHMARK", t);
-                // XXX - Make sure this is handled properly
+                // NOCOMMIT - Make sure this is handled properly
             }
 
             // Notify the master we are ready to start executing
@@ -318,7 +318,7 @@ public class BenchmarkExecutorService extends AbstractBenchmarkService<Benchmark
             final InternalExecutorState ies = benchmarks.get(request.benchmarkId);
 
             if (ies == null) {
-                channel.sendResponse(new BenchmarkIllegalStateException("benchmark [" + request.benchmarkId + "]: missing internal state"));
+                channel.sendResponse(new ElasticsearchIllegalStateException("benchmark [" + request.benchmarkId + "]: missing internal state"));
                 return;
             }
 
@@ -330,7 +330,7 @@ public class BenchmarkExecutorService extends AbstractBenchmarkService<Benchmark
                     if (!status.hasErrors()) {
                         channel.sendResponse(status);
                     } else {
-                        channel.sendResponse(new BenchmarkIllegalStateException("benchmark [" + request.benchmarkId + "]: " + status.error()));
+                        channel.sendResponse(new ElasticsearchIllegalStateException("benchmark [" + request.benchmarkId + "]: " + status.error()));
                     }
                 }
             } catch (Throwable t) {
