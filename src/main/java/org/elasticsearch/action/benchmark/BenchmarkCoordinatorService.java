@@ -31,6 +31,8 @@ import org.elasticsearch.action.benchmark.exception.*;
 import org.elasticsearch.cluster.*;
 import org.elasticsearch.cluster.metadata.*;
 import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.logging.ESLogger;
+import org.elasticsearch.common.logging.ESLoggerFactory;
 import org.elasticsearch.common.regex.Regex;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.util.concurrent.CountDown;
@@ -43,7 +45,35 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 
 /**
- * Service component for running benchmarks.
+ * Coordinates execution of benchmarks.
+ *
+ * This class is responsible for coordinating the cluster metadata associated with each benchmark. It
+ * listens for cluster change events via
+ * {@link org.elasticsearch.cluster.ClusterStateListener#clusterChanged(org.elasticsearch.cluster.ClusterChangedEvent)}
+ * and responds by initiating the appropriate sequence of actions necessary to service each event. Since this class
+ * is primarily focused on the management of cluster state, it checks to see if it is executing on the master and, if not,
+ * simply does nothing.
+ *
+ * There is a related class, {@link org.elasticsearch.action.benchmark.BenchmarkExecutorService} which communicates
+ * with, and is coordinated by, this class. It's role is to manage the actual execution of benchmarks on the assigned
+ * nodes.
+ *
+ * The typical lifecycle of a benchmark is as follows:
+ *
+ * 1. Client submits a benchmark, thereby creating a metadata entry with state INITIALIZING.
+ * 2. Executor nodes notice the metadata change via
+ *    {@link org.elasticsearch.action.benchmark.BenchmarkExecutorService#clusterChanged(org.elasticsearch.cluster.ClusterChangedEvent)}
+ *     and initialize themselves.
+ * 3. Executor nodes call back to the coordinator (using the transport service) to get description of the benchmark. Once received,
+ *    executors update their node state to READY.
+ * 4. Once the coordinator receives READY from all executors, it updates the metadata state to RUNNING.
+ * 5. Executor nodes notice the metadata change to state RUNNING and start actually executing the benchmark.
+ * 6. As each executor finishes, it updates its state to COMPLETE.
+ * 7. Once the coordinator receives COMPLETE from all executors, it requests the results (using the transport service) from
+ *    each executor.
+ * 8. After all results have been received, the coordinator updates the benchmark state to COMPLETE.
+ * 9. On receipt of the COMPLETE state, the coordinator removes the benchmark from the cluster metadata and
+ *    returns the results back to the client.
  */
 public class BenchmarkCoordinatorService extends AbstractBenchmarkService<BenchmarkCoordinatorService> {
 
@@ -59,9 +89,7 @@ public class BenchmarkCoordinatorService extends AbstractBenchmarkService<Benchm
                                        BenchmarkUtility utility) {
 
         super(settings, clusterService, transportService, threadPool, utility);
-
         this.manager = manager;
-
         transportService.registerHandler(NodeStateUpdateRequestHandler.ACTION, new NodeStateUpdateRequestHandler());
         transportService.registerHandler(BenchmarkDefinitionRequestHandler.ACTION, new BenchmarkDefinitionRequestHandler());
     }
@@ -488,7 +516,9 @@ public class BenchmarkCoordinatorService extends AbstractBenchmarkService<Benchm
 
     /* ** Utilities ** */
 
-    protected final class InternalCoordinatorState {
+    protected static final class InternalCoordinatorState {
+
+        private static final ESLogger logger = ESLoggerFactory.getLogger(InternalCoordinatorState.class.getName());
 
         final String                benchmarkId;
         final BenchmarkStartRequest request;
@@ -576,35 +606,24 @@ public class BenchmarkCoordinatorService extends AbstractBenchmarkService<Benchm
     }
 
     private boolean allNodesReady(final BenchmarkMetaData.Entry entry) {
-        for (Map.Entry<String, BenchmarkMetaData.Entry.NodeState> e : entry.nodeStateMap().entrySet()) {
-            if (e.getValue() != BenchmarkMetaData.Entry.NodeState.READY) {
-                return false;
-            }
-        }
-        return true;
+        return checkAllNodeStates(entry, BenchmarkMetaData.Entry.NodeState.READY);
     }
 
     private boolean allNodesRunning(final BenchmarkMetaData.Entry entry) {
-        for (Map.Entry<String, BenchmarkMetaData.Entry.NodeState> e : entry.nodeStateMap().entrySet()) {
-            if (e.getValue() != BenchmarkMetaData.Entry.NodeState.RUNNING) {
-                return false;
-            }
-        }
-        return true;
+        return checkAllNodeStates(entry, BenchmarkMetaData.Entry.NodeState.RUNNING);
     }
 
     private boolean allNodesAborted(final BenchmarkMetaData.Entry entry) {
-        for (Map.Entry<String, BenchmarkMetaData.Entry.NodeState> e : entry.nodeStateMap().entrySet()) {
-            if (e.getValue() != BenchmarkMetaData.Entry.NodeState.ABORTED) {
-                return false;
-            }
-        }
-        return true;
+        return checkAllNodeStates(entry, BenchmarkMetaData.Entry.NodeState.ABORTED);
     }
 
     private boolean allNodesPaused(final BenchmarkMetaData.Entry entry) {
+        return checkAllNodeStates(entry, BenchmarkMetaData.Entry.NodeState.PAUSED);
+    }
+
+    private boolean checkAllNodeStates(final BenchmarkMetaData.Entry entry, final BenchmarkMetaData.Entry.NodeState state) {
         for (Map.Entry<String, BenchmarkMetaData.Entry.NodeState> e : entry.nodeStateMap().entrySet()) {
-            if (e.getValue() != BenchmarkMetaData.Entry.NodeState.PAUSED) {
+            if (e.getValue() != state) {
                 return false;
             }
         }
