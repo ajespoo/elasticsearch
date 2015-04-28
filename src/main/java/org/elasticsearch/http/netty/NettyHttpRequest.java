@@ -48,7 +48,7 @@ public class NettyHttpRequest extends HttpRequest {
         this.channel = channel;
         this.params = new HashMap<>();
         if (request.content().isReadable()) {
-            this.content = new ByteBufBytesReference(request.content(), true);
+            this.content = new ByteBufBytesReference(request.content());
         } else {
             this.content = BytesArray.EMPTY;
         }

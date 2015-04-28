@@ -55,7 +55,7 @@ public class ByteBufStreamInput extends StreamInput {
 
     @Override
     public BytesReference readBytesReference(int length) throws IOException {
-        ByteBufBytesReference ref = new ByteBufBytesReference(buffer.slice(buffer.readerIndex(), length), false);
+        ByteBufBytesReference ref = new ByteBufBytesReference(buffer.slice(buffer.readerIndex(), length));
         buffer.skipBytes(length);
         return ref;
     }
@@ -143,13 +143,5 @@ public class ByteBufStreamInput extends StreamInput {
     }
 
     @Override
-    public void close() throws IOException {
-        buffer.release();
-    }
-
-    // TODO remove me again
-    @Override
-    public String toString() {
-        return "ByteBufStreamInput: " + buffer.refCnt();
-    }
+    public void close() throws IOException {}
 }

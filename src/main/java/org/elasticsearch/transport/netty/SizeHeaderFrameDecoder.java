@@ -20,6 +20,7 @@
 package org.elasticsearch.transport.netty;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import io.netty.handler.codec.TooLongFrameException;
@@ -97,9 +98,8 @@ public class SizeHeaderFrameDecoder extends ByteToMessageDecoder {
         }
 
         ByteBuf message = buffer.readSlice(messageSize).retain();
-        //message = new LoggingByteBufDecorator(message);
-
-        //Loggers.getLogger(getClass(), settings).error("refCnt of buffer is {}, length {}, server {}", message.refCnt(), message.readableBytes(), isServer);
+        // never ever care for releases again by making the bytebuf unreleasable
+        message = Unpooled.unreleasableBuffer(message);
         message.skipBytes(2);
         out.add(message);
     }

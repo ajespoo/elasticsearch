@@ -21,7 +21,6 @@ package org.elasticsearch.transport.netty;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.*;
-import org.apache.lucene.util.IOUtils;
 import org.elasticsearch.Version;
 import org.elasticsearch.common.component.Lifecycle;
 import org.elasticsearch.common.compress.Compressor;
@@ -147,20 +146,17 @@ public class MessageChannelHandler extends ChannelInboundHandlerAdapter {
         try {
             response.readFrom(streamInput);
         } catch (Throwable e) {
-            handleException(handler, new TransportSerializationException("Failed to deserialize response of type [" + response.getClass().getName() + "]", e), streamInput);
+            handleException(handler, new TransportSerializationException("Failed to deserialize response of type [" + response.getClass().getName() + "]", e));
             return;
         }
         try {
             if (ThreadPool.Names.SAME.equals(handler.executor())) {
-                //noinspection unchecked
                 handler.handleResponse(response);
-                streamInput.close();
-                //logger.info("### handleResponse.sameThread ### closing, waiting for failure");
             } else {
-                threadPool.executor(handler.executor()).execute(new ResponseHandler(handler, response, streamInput));
+                threadPool.executor(handler.executor()).execute(new ResponseHandler(handler, response));
             }
         } catch (Throwable e) {
-            handleException(handler, new ResponseHandlerFailureTransportException(e), streamInput);
+            handleException(handler, new ResponseHandlerFailureTransportException(e));
         }
     }
 
@@ -172,10 +168,10 @@ public class MessageChannelHandler extends ChannelInboundHandlerAdapter {
         } catch (Throwable e) {
             error = new TransportSerializationException("Failed to deserialize exception response from stream", e);
         }
-        handleException(handler, error, buffer);
+        handleException(handler, error);
     }
 
-    private void handleException(final TransportResponseHandler handler, Throwable error, final StreamInput buffer) {
+    private void handleException(final TransportResponseHandler handler, Throwable error) {
         if (!(error instanceof RemoteTransportException)) {
             error = new RemoteTransportException(error.getMessage(), error);
         }
@@ -183,8 +179,6 @@ public class MessageChannelHandler extends ChannelInboundHandlerAdapter {
         if (ThreadPool.Names.SAME.equals(handler.executor())) {
             try {
                 handler.handleException(rtx);
-//                logger.info("### handleExceptionSameThread ### closing, waiting for failure");
-                IOUtils.closeWhileHandlingException(buffer);
             } catch (Throwable e) {
                 logger.error("failed to handle exception response [{}]", e, handler);
             }
@@ -194,8 +188,6 @@ public class MessageChannelHandler extends ChannelInboundHandlerAdapter {
                 public void run() {
                     try {
                         handler.handleException(rtx);
-//                        logger.info("### handleExceptionSameThread ### closing, waiting for failure");
-                        IOUtils.closeWhileHandlingException(buffer);
                     } catch (Throwable e) {
                         logger.error("failed to handle exception response [{}]", e, handler);
                     }
@@ -237,10 +229,8 @@ public class MessageChannelHandler extends ChannelInboundHandlerAdapter {
             request.readFrom(streamInput);
             if (ThreadPool.Names.SAME.equals(reg.getExecutor())) {
                 reg.getHandler().messageReceived(request, transportChannel);
-                // TODO this blows up, because TransportShardReplicationOperationAction is going async, and we immediately close
-                //streamInput.close();
             } else {
-                threadPool.executor(reg.getExecutor()).execute(new RequestHandler(reg, request, transportChannel, action, streamInput));
+                threadPool.executor(reg.getExecutor()).execute(new RequestHandler(reg, request, transportChannel));
             }
         } catch (Throwable e) {
             try {
@@ -262,12 +252,10 @@ public class MessageChannelHandler extends ChannelInboundHandlerAdapter {
 
         private final TransportResponseHandler handler;
         private final TransportResponse response;
-        private StreamInput buffer;
 
-        public ResponseHandler(TransportResponseHandler handler, TransportResponse response, StreamInput buffer) {
+        public ResponseHandler(TransportResponseHandler handler, TransportResponse response) {
             this.handler = handler;
             this.response = response;
-            this.buffer = buffer;
         }
 
         @SuppressWarnings({"unchecked"})
@@ -275,10 +263,8 @@ public class MessageChannelHandler extends ChannelInboundHandlerAdapter {
         public void run() {
             try {
                 handler.handleResponse(response);
-                buffer.close();
-                //logger.info("### ResponseHandler.run ### closing, waiting for failure");
             } catch (Throwable e) {
-                handleException(handler, new ResponseHandlerFailureTransportException(e), buffer);
+                handleException(handler, new ResponseHandlerFailureTransportException(e));
             }
         }
     }
@@ -287,23 +273,17 @@ public class MessageChannelHandler extends ChannelInboundHandlerAdapter {
         private final RequestHandlerRegistry reg;
         private final TransportRequest request;
         private final NettyTransportChannel transportChannel;
-        private final String action;
-        private final StreamInput streamInput;
 
-        public RequestHandler(RequestHandlerRegistry reg, TransportRequest request, NettyTransportChannel transportChannel, String action, StreamInput streamInput) {
-//        public RequestHandler(TransportRequestHandler handler, TransportRequest request, NettyTransportChannel transportChannel, String action) {
+        public RequestHandler(RequestHandlerRegistry reg, TransportRequest request, NettyTransportChannel transportChannel) {
             this.reg = reg;
             this.request = request;
             this.transportChannel = transportChannel;
-            this.action = action;
-            this.streamInput = streamInput;
         }
 
         @SuppressWarnings({"unchecked"})
         @Override
         protected void doRun() throws Exception {
             reg.getHandler().messageReceived(request, transportChannel);
-            streamInput.close();
         }
 
         @Override

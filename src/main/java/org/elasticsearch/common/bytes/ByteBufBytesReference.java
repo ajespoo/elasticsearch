@@ -36,12 +36,8 @@ public class ByteBufBytesReference implements BytesReference, Closeable {
 
     private final ByteBuf buffer;
 
-//    public ByteBufBytesReference(ByteBuf buffer) {
-//        this(buffer, true);
-//    }
-
-    public ByteBufBytesReference(ByteBuf buffer, boolean retain) {
-        this.buffer = retain ? buffer.retain() : buffer;
+    public ByteBufBytesReference(ByteBuf buffer) {
+        this.buffer = buffer;
     }
 
     @Override
@@ -56,12 +52,12 @@ public class ByteBufBytesReference implements BytesReference, Closeable {
 
     @Override
     public BytesReference slice(int from, int length) {
-        return new ByteBufBytesReference(buffer.slice(from, length), false);
+        return new ByteBufBytesReference(buffer.slice(from, length));
     }
 
     @Override
     public StreamInput streamInput() {
-        return ByteBufStreamInputFactory.create(buffer);
+        return ByteBufStreamInputFactory.create(buffer.duplicate());
     }
 
     @Override
@@ -147,13 +143,5 @@ public class ByteBufBytesReference implements BytesReference, Closeable {
     }
 
     @Override
-    public void close() {
-        buffer.release();
-    }
-
-    // TODO REMOVE ME again
-    @Override
-    public String toString() {
-        return buffer.toString();
-    }
+    public void close() {}
 }
