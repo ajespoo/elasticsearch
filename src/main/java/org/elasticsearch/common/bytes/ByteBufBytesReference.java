@@ -19,24 +19,29 @@
 package org.elasticsearch.common.bytes;
 
 import com.google.common.base.Charsets;
+import io.netty.buffer.ByteBuf;
 import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.common.io.Channels;
 import org.elasticsearch.common.io.stream.StreamInput;
-import org.elasticsearch.transport.netty.ChannelBufferStreamInputFactory;
-import org.jboss.netty.buffer.ChannelBuffer;
+import org.elasticsearch.transport.netty.ByteBufStreamInputFactory;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.channels.GatheringByteChannel;
 
 /**
  */
-public class ChannelBufferBytesReference implements BytesReference {
+public class ByteBufBytesReference implements BytesReference, Closeable {
 
-    private final ChannelBuffer buffer;
+    private final ByteBuf buffer;
 
-    public ChannelBufferBytesReference(ChannelBuffer buffer) {
-        this.buffer = buffer;
+//    public ByteBufBytesReference(ByteBuf buffer) {
+//        this(buffer, true);
+//    }
+
+    public ByteBufBytesReference(ByteBuf buffer, boolean retain) {
+        this.buffer = retain ? buffer.retain() : buffer;
     }
 
     @Override
@@ -51,12 +56,12 @@ public class ChannelBufferBytesReference implements BytesReference {
 
     @Override
     public BytesReference slice(int from, int length) {
-        return new ChannelBufferBytesReference(buffer.slice(from, length));
+        return new ByteBufBytesReference(buffer.slice(from, length), false);
     }
 
     @Override
     public StreamInput streamInput() {
-        return ChannelBufferStreamInputFactory.create(buffer.duplicate());
+        return ByteBufStreamInputFactory.create(buffer);
     }
 
     @Override
@@ -90,7 +95,7 @@ public class ChannelBufferBytesReference implements BytesReference {
     }
 
     @Override
-    public ChannelBuffer toChannelBuffer() {
+    public ByteBuf toByteBuf() {
         return buffer.duplicate();
     }
 
@@ -139,5 +144,16 @@ public class ChannelBufferBytesReference implements BytesReference {
     @Override
     public boolean equals(Object obj) {
         return Helper.bytesEqual(this, (BytesReference) obj);
+    }
+
+    @Override
+    public void close() {
+        buffer.release();
+    }
+
+    // TODO REMOVE ME again
+    @Override
+    public String toString() {
+        return buffer.toString();
     }
 }

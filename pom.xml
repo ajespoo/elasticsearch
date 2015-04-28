@@ -280,9 +280,15 @@
 
         <dependency>
             <groupId>io.netty</groupId>
-            <artifactId>netty</artifactId>
-            <version>3.10.0.Final</version>
+            <artifactId>netty-all</artifactId>
+            <version>4.0.27.Final</version>
             <scope>compile</scope>
+        </dependency>
+        <!-- TODO remove me again, just here due to intellij problems -->
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-codec</artifactId>
+            <version>4.0.27.Final</version>
         </dependency>
 
         <dependency>
@@ -817,7 +823,7 @@
                             <include>com.fasterxml.jackson.dataformat:jackson-dataformat-cbor</include>
                             <include>joda-time:joda-time</include>
                             <include>org.joda:joda-convert</include>
-                            <include>io.netty:netty</include>
+                            <include>io.netty:netty-all</include>
                             <include>com.ning:compress-lzf</include>
                             <include>com.github.spullara.mustache.java:compiler</include>
                             <include>com.tdunning:t-digest</include>
@@ -847,7 +853,7 @@
                             <shadedPattern>org.elasticsearch.common.joda.time</shadedPattern>
                         </relocation>
                         <relocation>
-                            <pattern>org.jboss.netty</pattern>
+                            <pattern>io.netty</pattern>
                             <shadedPattern>org.elasticsearch.common.netty</shadedPattern>
                         </relocation>
                         <relocation>
@@ -883,12 +889,6 @@
                                 <exclude>/*.txt</exclude>
                                 <exclude>build.properties</exclude>
                             </excludes>
-                        </filter>
-                        <filter>
-                            <artifact>io.netty:netty</artifact>
-                            <includes>
-                                <include>org/jboss/netty/**</include>
-                            </includes>
                         </filter>
                     </filters>
                 </configuration>
@@ -1717,8 +1717,6 @@
                                 <!-- t-digest -->
                                 <exclude>src/main/java/org/elasticsearch/search/aggregations/metrics/percentiles/tdigest/TDigestState.java</exclude>
                                 <exclude>src/test/java/org/elasticsearch/search/aggregations/metrics/GroupTree.java</exclude>
-                                <!-- netty pipelining -->
-                                <exclude>src/main/java/org/elasticsearch/http/netty/pipelining/**</exclude>
                             </excludes>
                         </configuration>
                         <executions>

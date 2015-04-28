@@ -19,34 +19,36 @@
 
 package org.elasticsearch.http.netty;
 
+import com.google.common.collect.Lists;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.http.HttpResponseEncoder;
 import org.elasticsearch.common.netty.NettyUtils;
-import org.jboss.netty.buffer.ChannelBuffer;
-import org.jboss.netty.buffer.ChannelBuffers;
-import org.jboss.netty.buffer.CompositeChannelBuffer;
-import org.jboss.netty.channel.Channel;
-import org.jboss.netty.channel.ChannelHandlerContext;
-import org.jboss.netty.handler.codec.http.HttpResponseEncoder;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Wraps a netty {@link HttpResponseEncoder} and makes sure that if the resulting
+ * Wraps a netty {@link io.netty.handler.codec.http.HttpResponseEncoder} and makes sure that if the resulting
  * channel buffer is composite, it will use the correct gathering flag. See more
  * at {@link NettyUtils#DEFAULT_GATHERING}.
  */
 public class ESHttpResponseEncoder extends HttpResponseEncoder {
 
-    @Override
-    protected Object encode(ChannelHandlerContext ctx, Channel channel, Object msg) throws Exception {
-        Object retVal = super.encode(ctx, channel, msg);
-        if (retVal instanceof CompositeChannelBuffer) {
-            CompositeChannelBuffer ccb = (CompositeChannelBuffer) retVal;
-            if (ccb.useGathering() != NettyUtils.DEFAULT_GATHERING) {
-                List<ChannelBuffer> decompose = ccb.decompose(ccb.readerIndex(), ccb.readableBytes());
-                return ChannelBuffers.wrappedBuffer(NettyUtils.DEFAULT_GATHERING,
-                        decompose.toArray(new ChannelBuffer[decompose.size()]));
-            }
-        }
-        return retVal;
-    }
+    // TODO FIXME still needed?
+
+//    @Override
+//    protected Object encode(ChannelHandlerContext ctx, Object msg, List<Object> out) throws Exception {
+//        List<Object> vals = Lists.newArrayList();
+//        super.encode(ctx, channel, vals);
+//        if (retVal instanceof CompositeChannelBuffer) {
+//            CompositeChannelBuffer ccb = (CompositeChannelBuffer) retVal;
+//            if (ccb.useGathering() != NettyUtils.DEFAULT_GATHERING) {
+//                List<ChannelBuffer> decompose = ccb.decompose(ccb.readerIndex(), ccb.readableBytes());
+//                return ChannelBuffers.wrappedBuffer(NettyUtils.DEFAULT_GATHERING,
+//                        decompose.toArray(new ChannelBuffer[decompose.size()]));
+//            }
+//        }
+//        return retVal;
+//    }
 }

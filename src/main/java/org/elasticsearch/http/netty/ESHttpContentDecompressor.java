@@ -19,11 +19,10 @@
 
 package org.elasticsearch.http.netty;
 
+import io.netty.channel.embedded.EmbeddedChannel;
+import io.netty.handler.codec.http.HttpContentDecompressor;
+import io.netty.handler.codec.http.HttpHeaders;
 import org.elasticsearch.transport.TransportException;
-import org.jboss.netty.buffer.ChannelBuffer;
-import org.jboss.netty.handler.codec.embedder.DecoderEmbedder;
-import org.jboss.netty.handler.codec.http.HttpContentDecompressor;
-import org.jboss.netty.handler.codec.http.HttpHeaders;
 
 public class ESHttpContentDecompressor extends HttpContentDecompressor {
     private final boolean compression;
@@ -34,12 +33,12 @@ public class ESHttpContentDecompressor extends HttpContentDecompressor {
     }
 
     @Override
-    protected DecoderEmbedder<ChannelBuffer> newContentDecoder(String contentEncoding) throws Exception {
+    protected EmbeddedChannel newContentDecoder(String contentEncoding) throws Exception {
         if (compression) {
             // compression is enabled so handle the request according to the headers (compressed and uncompressed)
             return super.newContentDecoder(contentEncoding);
         } else {
-            // if compression is disabled only allow "indentity" (uncompressed) requests
+            // if compression is disabled only allow "identity" (uncompressed) requests
             if (HttpHeaders.Values.IDENTITY.equals(contentEncoding)) {
                 // nothing to handle here
                 return null;

@@ -19,12 +19,12 @@
 package org.elasticsearch.http.netty;
 
 import com.google.common.collect.Lists;
+import io.netty.handler.codec.http.FullHttpResponse;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.InetSocketTransportAddress;
 import org.elasticsearch.http.HttpServerTransport;
 import org.elasticsearch.node.Node;
 import org.elasticsearch.test.ElasticsearchIntegrationTest;
-import org.jboss.netty.handler.codec.http.HttpResponse;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -36,7 +36,8 @@ import static org.elasticsearch.common.settings.ImmutableSettings.settingsBuilde
 import static org.elasticsearch.http.netty.NettyHttpClient.returnOpaqueIds;
 import static org.elasticsearch.test.ElasticsearchIntegrationTest.ClusterScope;
 import static org.elasticsearch.test.ElasticsearchIntegrationTest.Scope;
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.hasSize;
 
 /**
  *
@@ -58,7 +59,7 @@ public class NettyPipeliningDisabledIntegrationTest extends ElasticsearchIntegra
         InetSocketTransportAddress inetSocketTransportAddress = (InetSocketTransportAddress) httpServerTransport.boundAddress().boundAddress();
 
         try (NettyHttpClient nettyHttpClient = new NettyHttpClient()) {
-            Collection<HttpResponse> responses = nettyHttpClient.sendRequests(inetSocketTransportAddress.address(), requests.toArray(new String[]{}));
+            Collection<FullHttpResponse> responses = nettyHttpClient.sendRequests(inetSocketTransportAddress.address(), requests.toArray(new String[]{}));
             assertThat(responses, hasSize(requests.size()));
 
             List<String> opaqueIds = Lists.newArrayList(returnOpaqueIds(responses));

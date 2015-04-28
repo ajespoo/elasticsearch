@@ -169,7 +169,6 @@ public class TransportIndexAction extends TransportShardReplicationOperationActi
 
         IndexService indexService = indicesService.indexServiceSafe(shardRequest.shardId.getIndex());
         IndexShard indexShard = indexService.shardSafe(shardRequest.shardId.id());
-
         final WriteResult<IndexResponse> result = executeIndexRequestOnPrimary(null, request, indexShard);
         final IndexResponse response = result.response;
         final Translog.Location location = result.location;

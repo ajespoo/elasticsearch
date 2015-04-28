@@ -16,21 +16,30 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+package org.elasticsearch.http.netty.pipelining;
 
-package org.elasticsearch.transport.netty;
-
-import org.elasticsearch.common.io.stream.StreamInput;
-import org.jboss.netty.buffer.ChannelBuffer;
+import io.netty.channel.ChannelPromise;
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.FullHttpRequest;
 
 /**
+ *
  */
-public class ChannelBufferStreamInputFactory {
+public class HttpPipelinedRequest {
 
-    public static StreamInput create(ChannelBuffer buffer) {
-        return new ChannelBufferStreamInput(buffer, buffer.readableBytes());
+    private final FullHttpRequest request;
+    private final int sequenceId;
+
+    public HttpPipelinedRequest(FullHttpRequest request, int sequenceId) {
+        this.request = request;
+        this.sequenceId = sequenceId;
     }
 
-    public static StreamInput create(ChannelBuffer buffer, int size) {
-        return new ChannelBufferStreamInput(buffer, size);
+    public FullHttpRequest getRequest() {
+        return request;
+    }
+
+    public HttpPipelinedResponse createHttpResponse(DefaultFullHttpResponse response, ChannelPromise promise) {
+        return new HttpPipelinedResponse(response, promise, sequenceId);
     }
 }

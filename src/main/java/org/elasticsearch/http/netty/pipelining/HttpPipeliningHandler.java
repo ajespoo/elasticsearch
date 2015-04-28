@@ -1,12 +1,32 @@
+/*
+ * Licensed to Elasticsearch under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 package org.elasticsearch.http.netty.pipelining;
 
-import org.elasticsearch.common.logging.ESLogger;
-import org.elasticsearch.common.logging.ESLoggerFactory;
-import org.jboss.netty.channel.*;
-import org.jboss.netty.handler.codec.http.DefaultHttpRequest;
-import org.jboss.netty.handler.codec.http.HttpRequest;
+import io.netty.channel.ChannelDuplexHandler;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelPromise;
+import io.netty.handler.codec.http.FullHttpRequest;
 
-import java.util.*;
+import java.util.Comparator;
+import java.util.PriorityQueue;
+import java.util.Queue;
 
 /**
  * Implements HTTP pipelining ordering, ensuring that responses are completely served in the same order as their
@@ -14,19 +34,18 @@ import java.util.*;
  * cause the original message event to be effectively transformed into an OrderedUpstreamMessageEvent. Conversely
  * OrderedDownstreamChannelEvent objects are expected to be received for the correlating response objects.
  *
- * @author Christopher Hunt
+ * Based on https://github.com/typesafehub/netty-http-pipelining - which uses netty 3, written by Christopher Hunt
  */
-public class HttpPipeliningHandler extends SimpleChannelHandler {
+public class HttpPipeliningHandler extends ChannelDuplexHandler {
 
     public static final int INITIAL_EVENTS_HELD = 3;
 
     private final int maxEventsHeld;
+    private final Queue<HttpPipelinedResponse> holdingQueue;
 
-    private int sequence;
-    private int nextRequiredSequence;
-    private int nextRequiredSubsequence;
+    private int sequence = 0;
+    private int nextRequiredSequence = 0;
 
-    private final Queue<OrderedDownstreamChannelEvent> holdingQueue;
 
     /**
      * @param maxEventsHeld the maximum number of channel events that will be retained prior to aborting the channel
@@ -35,75 +54,49 @@ public class HttpPipeliningHandler extends SimpleChannelHandler {
      */
     public HttpPipeliningHandler(final int maxEventsHeld) {
         this.maxEventsHeld = maxEventsHeld;
-
-        holdingQueue = new PriorityQueue<>(INITIAL_EVENTS_HELD, new Comparator<OrderedDownstreamChannelEvent>() {
-            @Override
-            public int compare(OrderedDownstreamChannelEvent o1, OrderedDownstreamChannelEvent o2) {
-                final int delta = o1.getOrderedUpstreamMessageEvent().getSequence() - o2.getOrderedUpstreamMessageEvent().getSequence();
-                if (delta == 0) {
-                    return o1.getSubsequence() - o2.getSubsequence();
-                } else {
-                    return delta;
-                }
-            }
-        });
-    }
-
-    public int getMaxEventsHeld() {
-        return maxEventsHeld;
+        holdingQueue = new PriorityQueue<>(INITIAL_EVENTS_HELD);
     }
 
     @Override
-    public void messageReceived(final ChannelHandlerContext ctx, final MessageEvent e) {
-        final Object msg = e.getMessage();
-        if (msg instanceof HttpRequest) {
-            ctx.sendUpstream(new OrderedUpstreamMessageEvent(sequence++, e.getChannel(), msg, e.getRemoteAddress()));
-        } else {
-            ctx.sendUpstream(e);
+    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+        // no need to check for FullHttpRequest here, as it has been aggregated before
+        if (msg instanceof FullHttpRequest) {
+            super.channelRead(ctx, new HttpPipelinedRequest((FullHttpRequest) msg, sequence++));
         }
     }
 
-    @Override
-    public void handleDownstream(ChannelHandlerContext ctx, ChannelEvent e)
-            throws Exception {
-        if (e instanceof OrderedDownstreamChannelEvent) {
 
+    @Override
+    public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+        if (msg instanceof HttpPipelinedResponse) {
             boolean channelShouldClose = false;
 
             synchronized (holdingQueue) {
                 if (holdingQueue.size() < maxEventsHeld) {
 
-                    final OrderedDownstreamChannelEvent currentEvent = (OrderedDownstreamChannelEvent) e;
+                    final HttpPipelinedResponse currentEvent = (HttpPipelinedResponse) msg;
                     holdingQueue.add(currentEvent);
 
                     while (!holdingQueue.isEmpty()) {
-                        final OrderedDownstreamChannelEvent nextEvent = holdingQueue.peek();
+                        final HttpPipelinedResponse nextEvent = holdingQueue.peek();
 
-                        if (nextEvent.getOrderedUpstreamMessageEvent().getSequence() != nextRequiredSequence |
-                                nextEvent.getSubsequence() != nextRequiredSubsequence) {
+                        if (nextEvent.getSequenceId() != nextRequiredSequence) {
                             break;
                         }
                         holdingQueue.remove();
-                        ctx.sendDownstream(nextEvent.getChannelEvent());
-                        if (nextEvent.isLast()) {
-                            ++nextRequiredSequence;
-                            nextRequiredSubsequence = 0;
-                        } else {
-                            ++nextRequiredSubsequence;
-                        }
+                        super.write(ctx, nextEvent.getResponse(), nextEvent.getPromise());
+                        nextRequiredSequence++;
                     }
-
                 } else {
                     channelShouldClose = true;
                 }
             }
 
             if (channelShouldClose) {
-                Channels.close(e.getChannel());
+                ctx.close();
             }
         } else {
-            super.handleDownstream(ctx, e);
+            super.write(ctx, msg, promise);
         }
     }
-
 }

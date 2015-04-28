@@ -20,13 +20,13 @@
 package org.elasticsearch.common.bytes;
 
 import com.google.common.base.Charsets;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import io.netty.util.CharsetUtil;
 import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.common.io.Channels;
 import org.elasticsearch.common.io.stream.ByteBufferStreamInput;
 import org.elasticsearch.common.io.stream.StreamInput;
-import org.jboss.netty.buffer.ChannelBuffer;
-import org.jboss.netty.buffer.ChannelBuffers;
-import org.jboss.netty.util.CharsetUtil;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -114,8 +114,8 @@ public class ByteBufferBytesReference implements BytesReference {
     }
 
     @Override
-    public ChannelBuffer toChannelBuffer() {
-        return ChannelBuffers.wrappedBuffer(buffer);
+    public ByteBuf toByteBuf() {
+        return Unpooled.wrappedBuffer(buffer);
     }
 
     @Override

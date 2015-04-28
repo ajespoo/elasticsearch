@@ -18,12 +18,12 @@
  */
 package org.elasticsearch.http.netty;
 
+import io.netty.handler.codec.http.FullHttpResponse;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.InetSocketTransportAddress;
 import org.elasticsearch.http.HttpServerTransport;
 import org.elasticsearch.node.Node;
 import org.elasticsearch.test.ElasticsearchIntegrationTest;
-import org.jboss.netty.handler.codec.http.HttpResponse;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -38,7 +38,6 @@ import static org.elasticsearch.test.ElasticsearchIntegrationTest.Scope;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 
-
 @ClusterScope(scope = Scope.TEST, numDataNodes = 1)
 public class NettyPipeliningEnabledIntegrationTest extends ElasticsearchIntegrationTest {
 
@@ -49,14 +48,14 @@ public class NettyPipeliningEnabledIntegrationTest extends ElasticsearchIntegrat
 
     @Test
     public void testThatNettyHttpServerSupportsPipelining() throws Exception {
-        List<String> requests = Arrays.asList("/", "/_nodes/stats", "/", "/_cluster/state", "/");
+        List<String> requests = Arrays.asList("/", "/_nodes/stats", "/", "/_cluster/state", "/", "/_nodes", "/");
 
         HttpServerTransport httpServerTransport = internalCluster().getInstance(HttpServerTransport.class);
         InetSocketTransportAddress inetSocketTransportAddress = (InetSocketTransportAddress) httpServerTransport.boundAddress().boundAddress();
 
         try (NettyHttpClient nettyHttpClient = new NettyHttpClient()) {
-            Collection<HttpResponse> responses = nettyHttpClient.sendRequests(inetSocketTransportAddress.address(), requests.toArray(new String[]{}));
-            assertThat(responses, hasSize(5));
+            Collection<FullHttpResponse> responses = nettyHttpClient.sendRequests(inetSocketTransportAddress.address(), requests.toArray(new String[]{}));
+            assertThat(responses, hasSize(requests.size()));
 
             Collection<String> opaqueIds = returnOpaqueIds(responses);
             assertOpaqueIdsInOrder(opaqueIds);

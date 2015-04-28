@@ -19,22 +19,20 @@
 
 package org.elasticsearch.common;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import org.elasticsearch.common.bytes.ByteBufferBytesReference;
 import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.io.Channels;
 import org.elasticsearch.test.ElasticsearchTestCase;
 import org.hamcrest.Matchers;
-import org.jboss.netty.buffer.ByteBufferBackedChannelBuffer;
-import org.jboss.netty.buffer.ChannelBuffer;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.EOFException;
-import java.io.File;
 import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
@@ -170,7 +168,7 @@ public class ChannelsTests extends ElasticsearchTestCase {
         int length = randomIntBetween(1, randomBytes.length / 2);
         int offset = randomIntBetween(0, randomBytes.length - length);
         ByteBuffer byteBuffer = ByteBuffer.wrap(randomBytes);
-        ChannelBuffer source = new ByteBufferBackedChannelBuffer(byteBuffer);
+        ByteBuf source = Unpooled.wrappedBuffer(byteBuffer);
         Channels.writeToChannel(source, offset, length, fileChannel);
 
         BytesReference copyRef = new BytesArray(Channels.readFromFileChannel(fileChannel, 0, length));

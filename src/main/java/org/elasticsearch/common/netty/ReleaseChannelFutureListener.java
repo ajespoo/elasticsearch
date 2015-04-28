@@ -19,15 +19,15 @@
 
 package org.elasticsearch.common.netty;
 
+import io.netty.util.concurrent.Future;
+import io.netty.util.concurrent.GenericFutureListener;
 import org.elasticsearch.common.lease.Releasable;
-import org.jboss.netty.channel.ChannelFuture;
-import org.jboss.netty.channel.ChannelFutureListener;
 
 /**
  * A channel listener that releases a {@link org.elasticsearch.common.lease.Releasable} when
  * the operation is complete.
  */
-public class ReleaseChannelFutureListener implements ChannelFutureListener {
+public class ReleaseChannelFutureListener implements GenericFutureListener {
 
     private final Releasable releasable;
 
@@ -36,7 +36,7 @@ public class ReleaseChannelFutureListener implements ChannelFutureListener {
     }
 
     @Override
-    public void operationComplete(ChannelFuture future) throws Exception {
+    public void operationComplete(Future future) throws Exception {
         releasable.close();
     }
 }

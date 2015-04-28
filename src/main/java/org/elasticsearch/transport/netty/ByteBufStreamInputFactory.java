@@ -16,22 +16,21 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.elasticsearch.common.netty;
 
-import org.jboss.netty.buffer.ChannelBuffer;
-import org.jboss.netty.channel.Channel;
-import org.jboss.netty.channel.ChannelHandlerContext;
-import org.jboss.netty.handler.codec.frame.FrameDecoder;
+package org.elasticsearch.transport.netty;
+
+import io.netty.buffer.ByteBuf;
+import org.elasticsearch.common.io.stream.StreamInput;
 
 /**
- * A marker to not remove frame decoder from the resulting jar so plugins can use it.
  */
-public class KeepFrameDecoder extends FrameDecoder {
+public class ByteBufStreamInputFactory {
 
-    public static final KeepFrameDecoder decoder = new KeepFrameDecoder();
+    public static StreamInput create(ByteBuf buffer) {
+        return new ByteBufStreamInput(buffer);
+    }
 
-    @Override
-    protected Object decode(ChannelHandlerContext ctx, Channel channel, ChannelBuffer buffer) throws Exception {
-        return null;
+    public static StreamInput create(ByteBuf buffer, int size) {
+        return new ByteBufStreamInput(buffer, size);
     }
 }

@@ -30,7 +30,7 @@ import com.carrotsearch.randomizedtesting.generators.RandomPicks;
 import com.carrotsearch.randomizedtesting.generators.RandomStrings;
 import com.carrotsearch.randomizedtesting.rules.TestRuleAdapter;
 import com.google.common.base.Predicate;
-
+import io.netty.util.ResourceLeakDetector;
 import org.apache.lucene.uninverting.UninvertingReader;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.LuceneTestCase.SuppressCodecs;
@@ -96,6 +96,7 @@ public abstract class ElasticsearchTestCase extends LuceneTestCase {
 
     static {
         BootstrapForTesting.ensureInitialized();
+        ResourceLeakDetector.setLevel(ResourceLeakDetector.Level.valueOf(System.getProperty("tests.netty.threadleaklevel", "disabled").toUpperCase(Locale.ROOT)));
     }
 
     protected final ESLogger logger = Loggers.getLogger(getClass());
@@ -228,7 +229,7 @@ public abstract class ElasticsearchTestCase extends LuceneTestCase {
     }
 
     // -----------------------------------------------------------------
-    // Test facilities and facades for subclasses. 
+    // Test facilities and facades for subclasses.
     // -----------------------------------------------------------------
 
     // TODO: replaces uses of getRandom() with random()
@@ -472,7 +473,7 @@ public abstract class ElasticsearchTestCase extends LuceneTestCase {
      */
     @Override
     public Path getDataPath(String relativePath) {
-        // we override LTC behavior here: wrap even resources with mockfilesystems, 
+        // we override LTC behavior here: wrap even resources with mockfilesystems,
         // because some code is buggy when it comes to multiple nio.2 filesystems
         // (e.g. FileSystemUtils, and likely some tests)
         try {

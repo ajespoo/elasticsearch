@@ -41,13 +41,13 @@ grant {
   // Allow read/write to all system properties
   permission java.util.PropertyPermission "*", "read,write";
 
-  // needed by junit4's gson usage 
+  // needed by junit4's gson usage
   permission java.lang.reflect.ReflectPermission "suppressAccessChecks";
 
   // needed by scripting engines, etc
   permission java.lang.RuntimePermission "createClassLoader";
 
-  // needed by lucene SPI currently 
+  // needed by lucene SPI currently
   permission java.lang.RuntimePermission "getClassLoader";
 
   // needed by GroovyScriptEngineService
@@ -101,4 +101,8 @@ grant {
 
   // needed by Mockito
   permission java.lang.RuntimePermission "reflectionFactoryAccess";
+
+  // Needed for netty4, this file is accessed when io.netty.util.NetUtil class is initialized
+  // Fixed in post netty 4.0.27, see https://github.com/netty/netty/pull/3695
+  permission java.io.FilePermission "/proc/sys/net/core/somaxconn", "read";
 };

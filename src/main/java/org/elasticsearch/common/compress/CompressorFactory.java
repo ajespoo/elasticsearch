@@ -21,6 +21,7 @@ package org.elasticsearch.common.compress;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import io.netty.buffer.ByteBuf;
 import org.apache.lucene.store.IndexInput;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.bytes.BytesArray;
@@ -32,7 +33,6 @@ import org.elasticsearch.common.io.stream.BytesStreamOutput;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
-import org.jboss.netty.buffer.ChannelBuffer;
 
 import java.io.IOException;
 import java.util.List;
@@ -130,7 +130,7 @@ public class CompressorFactory {
     }
 
     @Nullable
-    public static Compressor compressor(ChannelBuffer buffer) {
+    public static Compressor compressor(ByteBuf buffer) {
         for (Compressor compressor : compressors) {
             if (compressor.isCompressed(buffer)) {
                 return compressor;

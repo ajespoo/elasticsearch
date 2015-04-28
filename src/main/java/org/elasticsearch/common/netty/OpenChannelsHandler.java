@@ -19,10 +19,10 @@
 
 package org.elasticsearch.common.netty;
 
+import io.netty.channel.*;
 import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.metrics.CounterMetric;
 import org.elasticsearch.common.util.concurrent.ConcurrentCollections;
-import org.jboss.netty.channel.*;
 
 import java.util.Set;
 
@@ -30,7 +30,7 @@ import java.util.Set;
  *
  */
 @ChannelHandler.Sharable
-public class OpenChannelsHandler implements ChannelUpstreamHandler {
+public class OpenChannelsHandler extends ChannelInboundHandlerAdapter {
 
     final Set<Channel> openChannels = ConcurrentCollections.newConcurrentSet();
     final CounterMetric openChannelsMetric = new CounterMetric();
@@ -45,34 +45,28 @@ public class OpenChannelsHandler implements ChannelUpstreamHandler {
     final ChannelFutureListener remover = new ChannelFutureListener() {
         @Override
         public void operationComplete(ChannelFuture future) throws Exception {
-            boolean removed = openChannels.remove(future.getChannel());
+            boolean removed = openChannels.remove(future.channel());
             if (removed) {
                 openChannelsMetric.dec();
             }
             if (logger.isTraceEnabled()) {
-                logger.trace("channel closed: {}", future.getChannel());
+                logger.trace("channel closed: {}", future.channel());
             }
         }
     };
 
     @Override
-    public void handleUpstream(ChannelHandlerContext ctx, ChannelEvent e) throws Exception {
-        if (e instanceof ChannelStateEvent) {
-            ChannelStateEvent evt = (ChannelStateEvent) e;
-            // OPEN is also sent to when closing channel, but with FALSE on it to indicate it closes
-            if (evt.getState() == ChannelState.OPEN && Boolean.TRUE.equals(evt.getValue())) {
-                if (logger.isTraceEnabled()) {
-                    logger.trace("channel opened: {}", ctx.getChannel());
-                }
-                boolean added = openChannels.add(ctx.getChannel());
-                if (added) {
-                    openChannelsMetric.inc();
-                    totalChannelsMetric.inc();
-                    ctx.getChannel().getCloseFuture().addListener(remover);
-                }
-            }
+    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+        if (logger.isTraceEnabled()) {
+            logger.trace("channel opened: {}", ctx.channel());
         }
-        ctx.sendUpstream(e);
+        boolean added = openChannels.add(ctx.channel());
+        if (added) {
+            openChannelsMetric.inc();
+            totalChannelsMetric.inc();
+            ctx.channel().closeFuture().addListener(remover);
+        }
+        super.channelActive(ctx);
     }
 
     public long numberOfOpenChannels() {
@@ -88,4 +82,5 @@ public class OpenChannelsHandler implements ChannelUpstreamHandler {
             channel.close().awaitUninterruptibly();
         }
     }
+
 }

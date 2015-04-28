@@ -18,13 +18,12 @@
  */
 package org.elasticsearch.common.netty;
 
+import io.netty.buffer.UnpooledByteBufAllocator;
+import io.netty.util.internal.logging.InternalLogger;
+import io.netty.util.internal.logging.InternalLoggerFactory;
 import org.elasticsearch.common.Booleans;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.transport.netty.NettyInternalESLoggerFactory;
-import org.jboss.netty.logging.InternalLogger;
-import org.jboss.netty.logging.InternalLoggerFactory;
-import org.jboss.netty.util.ThreadNameDeterminer;
-import org.jboss.netty.util.ThreadRenamingRunnable;
 
 /**
  */
@@ -46,7 +45,7 @@ public class NettyUtils {
      * <p/>
      * In ES, we try and page the buffers allocated, all serialized data uses {@link org.elasticsearch.common.bytes.PagedBytesReference}
      * typically generated from {@link org.elasticsearch.common.io.stream.BytesStreamOutput}. When sending it over
-     * to netty, it creates a {@link org.jboss.netty.buffer.CompositeChannelBuffer} that wraps the relevant pages.
+     * to netty, it creates a {@link io.netty.buffer.CompositeByteBuf} that wraps the relevant pages.
      * <p/>
      * The idea with the usage of composite channel buffer is that a single large buffer will not be sent over
      * to the sun.nio layer. But, this will only happen if the composite channel buffer is created with a gathering
@@ -76,25 +75,19 @@ public class NettyUtils {
      */
     public static final boolean DEFAULT_GATHERING;
 
-    private static EsThreadNameDeterminer ES_THREAD_NAME_DETERMINER = new EsThreadNameDeterminer();
-
-    public static class EsThreadNameDeterminer implements ThreadNameDeterminer {
-        @Override
-        public String determineThreadName(String currentThreadName, String proposedThreadName) throws Exception {
-            // we control the thread name with a context, so use both
-            return currentThreadName + "{" + proposedThreadName + "}";
-        }
-    }
-
     static {
         InternalLoggerFactory.setDefaultFactory(new NettyInternalESLoggerFactory() {
             @Override
             public InternalLogger newInstance(String name) {
-                return super.newInstance(name.replace("org.jboss.netty.", "netty.").replace("org.jboss.netty.", "netty."));
+                return super.newInstance(name.replace("io.netty.", "netty.").replace("io.netty.", "netty."));
             }
         });
 
-        ThreadRenamingRunnable.setThreadNameDeterminer(ES_THREAD_NAME_DETERMINER);
+        System.setProperty("io.netty.noPreferDirect", "true");
+        // just for the pooledbytebufallocator
+        //System.setProperty("io.netty.allocator.tinyCacheSize", "0");
+        //System.setProperty("io.netty.allocator.smallCacheSize", "0");
+        //System.setProperty("io.netty.allocator.normalCacheSize", "0");
 
         /**
          * This is here just to give us an option to rollback the change, if its stable, we should remove

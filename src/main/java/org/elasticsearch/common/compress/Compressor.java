@@ -19,12 +19,12 @@
 
 package org.elasticsearch.common.compress;
 
+import io.netty.buffer.ByteBuf;
 import org.apache.lucene.store.IndexInput;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.settings.Settings;
-import org.jboss.netty.buffer.ChannelBuffer;
 
 import java.io.IOException;
 
@@ -40,7 +40,7 @@ public interface Compressor {
 
     boolean isCompressed(byte[] data, int offset, int length);
 
-    boolean isCompressed(ChannelBuffer buffer);
+    boolean isCompressed(ByteBuf buffer);
 
     boolean isCompressed(IndexInput in) throws IOException;
 

@@ -19,15 +19,16 @@
 
 package org.elasticsearch.common.bytes;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufAllocator;
+import io.netty.buffer.EmptyByteBuf;
+import io.netty.buffer.Unpooled;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.CharsRefBuilder;
 import org.elasticsearch.common.io.Channels;
 import org.elasticsearch.common.io.stream.StreamInput;
-import org.elasticsearch.common.netty.NettyUtils;
 import org.elasticsearch.common.util.BigArrays;
 import org.elasticsearch.common.util.ByteArray;
-import org.jboss.netty.buffer.ChannelBuffer;
-import org.jboss.netty.buffer.ChannelBuffers;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -42,6 +43,7 @@ import java.util.Arrays;
 public class PagedBytesReference implements BytesReference {
 
     private static final int PAGE_SIZE = BigArrays.BYTE_PAGE_SIZE;
+    public static final ByteBuf EMPTY_BYTEBUF = new EmptyByteBuf(ByteBufAllocator.DEFAULT);
 
     private final BigArrays bigarrays;
     protected final ByteArray bytearray;
@@ -179,14 +181,14 @@ public class PagedBytesReference implements BytesReference {
     }
 
     @Override
-    public ChannelBuffer toChannelBuffer() {
+    public ByteBuf toByteBuf() {
         // nothing to do
         if (length == 0) {
-            return ChannelBuffers.EMPTY_BUFFER;
+            return EMPTY_BYTEBUF;
         }
 
-        ChannelBuffer[] buffers;
-        ChannelBuffer currentBuffer = null;
+        ByteBuf[] buffers;
+        ByteBuf currentBuffer = null;
         BytesRef ref = new BytesRef();
         int pos = 0;
 
@@ -195,7 +197,8 @@ public class PagedBytesReference implements BytesReference {
             // remaining size of page fragment at offset
             int fragmentSize = Math.min(length, PAGE_SIZE - (offset % PAGE_SIZE));
             bytearray.get(offset, fragmentSize, ref);
-            currentBuffer = ChannelBuffers.wrappedBuffer(ref.bytes, ref.offset, fragmentSize);
+            // returns a heap byte buffer
+            currentBuffer = Unpooled.wrappedBuffer(ref.bytes, ref.offset, fragmentSize);
             pos += fragmentSize;
         }
 
@@ -207,7 +210,7 @@ public class PagedBytesReference implements BytesReference {
         // a slice > pagesize will likely require extra buffers for initial/trailing fragments
         int numBuffers = countRequiredBuffers((currentBuffer != null ? 1 : 0), length - pos);
 
-        buffers = new ChannelBuffer[numBuffers];
+        buffers = new ByteBuf[numBuffers];
         int bufferSlot = 0;
 
         if (currentBuffer != null) {
@@ -220,7 +223,7 @@ public class PagedBytesReference implements BytesReference {
             int remaining = length - pos;
             int bulkSize = (remaining > PAGE_SIZE) ? PAGE_SIZE : remaining;
             bytearray.get(offset + pos, bulkSize, ref);
-            currentBuffer = ChannelBuffers.wrappedBuffer(ref.bytes, ref.offset, bulkSize);
+            currentBuffer = Unpooled.wrappedBuffer(ref.bytes, ref.offset, bulkSize);
             buffers[bufferSlot] = currentBuffer;
             bufferSlot++;
             pos += bulkSize;
@@ -229,7 +232,9 @@ public class PagedBytesReference implements BytesReference {
         // this would indicate that our numBuffer calculation is off by one.
         assert (numBuffers == bufferSlot);
 
-        return ChannelBuffers.wrappedBuffer(NettyUtils.DEFAULT_GATHERING, buffers);
+        // TODO FIXME GATHERING
+        //return Unpooled.wrappedBuffer(NettyUtils.DEFAULT_GATHERING, buffers);
+        return Unpooled.wrappedBuffer(buffers);
     }
 
     @Override

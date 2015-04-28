@@ -27,6 +27,7 @@ import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.test.ElasticsearchIntegrationTest;
+import org.elasticsearch.test.junit.annotations.TestLogging;
 
 import java.util.List;
 
@@ -36,6 +37,8 @@ import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertSear
 
 
 @ElasticsearchIntegrationTest.SuiteScopeTest
+@ElasticsearchIntegrationTest.ClusterScope(numClientNodes = 0, numDataNodes = 1)
+@TestLogging("_root:INFO,action.support.replication:TRACE")
 public class AggregationsIntegrationTests extends ElasticsearchIntegrationTest {
 
     static int numDocs;
@@ -44,7 +47,9 @@ public class AggregationsIntegrationTests extends ElasticsearchIntegrationTest {
     public void setupSuiteScopeCluster() throws Exception {
         assertAcked(prepareCreate("index").addMapping("type", "f", "type=string").get());
         ensureYellow("index");
-        numDocs = randomIntBetween(1, 20);
+        //numDocs = randomIntBetween(1, 20);
+        // TODO static for debugging
+        numDocs = 1;
         List<IndexRequestBuilder> docs = Lists.newArrayList();
         for (int i = 0; i < numDocs; ++i) {
             docs.add(client().prepareIndex("index", "type").setSource("f", Integer.toString(i / 3)));

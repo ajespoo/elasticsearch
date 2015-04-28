@@ -18,6 +18,10 @@
  */
 package org.elasticsearch.transport.netty;
 
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelPipeline;
+import io.netty.channel.socket.SocketChannel;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.Version;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
@@ -33,11 +37,13 @@ import org.elasticsearch.common.transport.InetSocketTransportAddress;
 import org.elasticsearch.common.util.BigArrays;
 import org.elasticsearch.common.util.concurrent.AbstractRunnable;
 import org.elasticsearch.test.ElasticsearchIntegrationTest;
+import org.elasticsearch.test.junit.annotations.TestLogging;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.*;
-import org.jboss.netty.channel.Channel;
-import org.jboss.netty.channel.ChannelPipeline;
-import org.jboss.netty.channel.ChannelPipelineFactory;
+import org.elasticsearch.transport.ActionNotFoundTransportException;
+import org.elasticsearch.transport.TransportModule;
+import org.elasticsearch.transport.TransportRequest;
+import org.elasticsearch.transport.TransportRequestHandler;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -88,22 +94,24 @@ public class NettyTransportTests extends ElasticsearchIntegrationTest {
         }
 
         @Override
-        public ChannelPipelineFactory configureServerChannelPipelineFactory(String name, Settings groupSettings) {
-            return new ErrorPipelineFactory(this, name, groupSettings);
+        public ChannelHandler configureServerChannelHandler(String name, Settings groupSettings) {
+            return new ErrorHandler(this, name, groupSettings);
         }
 
-        private static class ErrorPipelineFactory extends ServerChannelPipelineFactory {
+        private static class ErrorHandler extends ServerChannelHandler {
 
             private final ESLogger logger;
 
-            public ErrorPipelineFactory(ExceptionThrowingNettyTransport exceptionThrowingNettyTransport, String name, Settings groupSettings) {
+            public ErrorHandler(ExceptionThrowingNettyTransport exceptionThrowingNettyTransport, String name, Settings groupSettings) {
                 super(exceptionThrowingNettyTransport, name, groupSettings);
                 this.logger = exceptionThrowingNettyTransport.logger;
             }
 
             @Override
-            public ChannelPipeline getPipeline() throws Exception {
-                ChannelPipeline pipeline = super.getPipeline();
+            public void initChannel(SocketChannel ch) throws Exception {
+                super.initChannel(ch);
+                ChannelPipeline pipeline = ch.pipeline();
+
                 pipeline.replace("dispatcher", "dispatcher", new MessageChannelHandler(nettyTransport, logger, NettyTransport.DEFAULT_PROFILE) {
 
                     @Override
@@ -117,7 +125,7 @@ public class NettyTransportTests extends ElasticsearchIntegrationTest {
                                 throw new ActionNotFoundTransportException(action);
                             }
                             final TransportRequest request = reg.newRequest();
-                            request.remoteAddress(new InetSocketTransportAddress((InetSocketAddress) channel.getRemoteAddress()));
+                            request.remoteAddress(new InetSocketTransportAddress((InetSocketAddress) channel.remoteAddress()));
                             request.readFrom(buffer);
                             if (request.hasHeader("ERROR")) {
                                 throw new ElasticsearchException((String) request.getHeader("ERROR"));
@@ -175,7 +183,6 @@ public class NettyTransportTests extends ElasticsearchIntegrationTest {
                             }                        }
                     }
                 });
-                return pipeline;
             }
         }
     }
