@@ -40,6 +40,7 @@ public class SizeHeaderFrameDecoder extends ByteToMessageDecoder {
 
     public SizeHeaderFrameDecoder() {
         super();
+        setCumulator(MERGE_CUMULATOR);
     }
 
     @Override
@@ -97,8 +98,17 @@ public class SizeHeaderFrameDecoder extends ByteToMessageDecoder {
             return;
         }
 
-        ByteBuf message = buffer.readSlice(messageSize).retain();
-        // never ever care for releases again by making the bytebuf unreleasable
+        // TODO Potentially use pooled impl for direct byte buffers
+        ByteBuf byteBuf = buffer.readSlice(messageSize).retain();// never ever care for releases again by making the bytebuf unreleasable
+        ByteBuf message;
+        // convert from direct bytebuf to heap bytebuf, then free direct bytebuf for release
+        if (byteBuf.isDirect()) {
+            message = Unpooled.copiedBuffer(byteBuf);
+            byteBuf.release();
+        } else {
+            message = byteBuf;
+        }
+
         message = Unpooled.unreleasableBuffer(message);
         message.skipBytes(2);
         out.add(message);

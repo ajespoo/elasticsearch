@@ -83,10 +83,10 @@ public class NettyUtils {
             }
         });
 
-        System.setProperty("io.netty.noPreferDirect", "true");
         // we manage resources ourselve, no need to try and detect leaks
         ResourceLeakDetector.setLevel(ResourceLeakDetector.Level.DISABLED);
 
+        // System.setProperty("io.netty.noPreferDirect", "true");
         // just for the pooledbytebufallocator
         //System.setProperty("io.netty.allocator.tinyCacheSize", "0");
         //System.setProperty("io.netty.allocator.smallCacheSize", "0");

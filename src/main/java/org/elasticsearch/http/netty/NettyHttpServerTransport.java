@@ -20,6 +20,8 @@
 package org.elasticsearch.http.netty;
 
 import io.netty.bootstrap.ServerBootstrap;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.oio.OioEventLoopGroup;
@@ -92,48 +94,29 @@ public class NettyHttpServerTransport extends AbstractLifecycleComponent<HttpSer
     protected final ByteSizeValue maxChunkSize;
 
     protected final int workerCount;
-
     protected final boolean blockingServer;
-
     protected final boolean pipelining;
-
     protected final int pipeliningMaxEvents;
-
     protected final boolean compression;
-
     protected final int compressionLevel;
-
     protected final boolean resetCookies;
-
     protected final String port;
-
     protected final String bindHost;
-
     protected final String publishHost;
-
-    protected final boolean detailedErrorsEnabled;
-
     protected int publishPort;
-
+    protected final boolean detailedErrorsEnabled;
     protected final String tcpNoDelay;
     protected final String tcpKeepAlive;
     protected final Boolean reuseAddress;
-
     protected final ByteSizeValue tcpSendBufferSize;
     protected final ByteSizeValue tcpReceiveBufferSize;
-    private final RecvByteBufAllocator recvByteBufAllocator;
-
+    protected final RecvByteBufAllocator recvByteBufAllocator;
     protected final int maxCompositeBufferComponents;
-
     protected volatile ServerBootstrap serverBootstrap;
-
     protected volatile BoundTransportAddress boundAddress;
-
     protected volatile Channel serverChannel;
-
-    protected OpenChannelsHandler serverOpenChannels;
-
     protected volatile HttpServerAdapter httpServerAdapter;
+    protected OpenChannelsHandler serverOpenChannels;
 
     @Inject
     public NettyHttpServerTransport(Settings settings, NetworkService networkService, BigArrays bigArrays) {
@@ -372,6 +355,23 @@ public class NettyHttpServerTransport extends AbstractLifecycleComponent<HttpSer
         protected void initChannel(SocketChannel ch) throws Exception {
             ChannelPipeline pipeline = ch.pipeline();
             pipeline.addLast("openChannels", transport.serverOpenChannels);
+            // TODO but this into generic channel inbound handler
+            pipeline.addLast("bytebufcopy", new ChannelInboundHandlerAdapter() {
+                @Override
+                public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+                    if (msg instanceof ByteBuf) {
+                        ByteBuf byteBuf = (ByteBuf) msg;
+                        if (byteBuf.isDirect()) {
+                            ByteBuf message = Unpooled.copiedBuffer(byteBuf);
+                            byteBuf.release();
+                            super.channelRead(ctx, Unpooled.unreleasableBuffer(message));
+                        } else {
+                            // no direct byte buf, just go on
+                            super.channelRead(ctx, msg);
+                        }
+                    }
+                }
+            });
             HttpRequestDecoder requestDecoder = new HttpRequestDecoder(
                     (int) transport.maxInitialLineLength.bytes(),
                     (int) transport.maxHeaderSize.bytes(),

@@ -991,7 +991,7 @@ public class NettyTransport extends AbstractLifecycleComponent<Transport> implem
 
     protected static class ClientChannelHandler extends ChannelInitializer<SocketChannel> {
         protected NettyTransport nettyTransport;
-        private Settings settings;
+        protected Settings settings;
 
         public ClientChannelHandler(NettyTransport nettyTransport, Settings settings) {
             this.nettyTransport = nettyTransport;
