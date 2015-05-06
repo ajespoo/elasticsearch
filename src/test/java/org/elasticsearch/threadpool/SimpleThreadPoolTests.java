@@ -115,6 +115,7 @@ public class SimpleThreadPoolTests extends ElasticsearchIntegrationTest {
             // or the ones that are occasionally come up from ElasticsearchSingleNodeTest
             if (threadName.contains("[" + MulticastChannel.SHARED_CHANNEL_NAME + "]")
                     || threadName.contains("[" + ElasticsearchSingleNodeTest.nodeName() + "]")
+                    || threadName.contains("threadDeathWatcher")
                     || threadName.contains("Keep-Alive-Timer")) {
                 continue;
             }
@@ -126,7 +127,7 @@ public class SimpleThreadPoolTests extends ElasticsearchIntegrationTest {
         }
     }
 
-    @Test(timeout = 20000)
+    @Test(timeout = 30000)
     public void testUpdatingThreadPoolSettings() throws Exception {
         internalCluster().startNodesAsync(2).get();
         ThreadPool threadPool = internalCluster().getDataNodeInstance(ThreadPool.class);
