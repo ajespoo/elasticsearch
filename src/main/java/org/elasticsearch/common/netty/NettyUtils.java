@@ -86,11 +86,13 @@ public class NettyUtils {
         // we manage resources ourselve, no need to try and detect leaks
         ResourceLeakDetector.setLevel(ResourceLeakDetector.Level.DISABLED);
 
-        // System.setProperty("io.netty.noPreferDirect", "true");
+        System.setProperty("io.netty.noPreferDirect", "true");
+
         // just for the pooledbytebufallocator
-        //System.setProperty("io.netty.allocator.tinyCacheSize", "0");
-        //System.setProperty("io.netty.allocator.smallCacheSize", "0");
-        //System.setProperty("io.netty.allocator.normalCacheSize", "0");
+        System.setProperty("io.netty.allocator.type", "pooled");
+        System.setProperty("io.netty.allocator.tinyCacheSize", "0");
+        System.setProperty("io.netty.allocator.smallCacheSize", "0");
+        System.setProperty("io.netty.allocator.normalCacheSize", "0");
 
         /**
          * This is here just to give us an option to rollback the change, if its stable, we should remove
