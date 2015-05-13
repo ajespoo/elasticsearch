@@ -281,14 +281,8 @@
         <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-all</artifactId>
-            <version>4.0.27.Final</version>
+            <version>4.0.28.Final</version>
             <scope>compile</scope>
-        </dependency>
-        <!-- TODO remove me again, just here due to intellij problems -->
-        <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty-codec</artifactId>
-            <version>4.0.27.Final</version>
         </dependency>
 
         <dependency>
