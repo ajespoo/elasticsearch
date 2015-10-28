@@ -83,9 +83,15 @@ class PluginBuildPlugin extends BuildPlugin {
 
     static Task configureBundleTask(Project project) {
         PluginPropertiesTask buildProperties = project.tasks.create(name: 'pluginProperties', type: PluginPropertiesTask)
+        File pluginMetadata = project.file("src/main/plugin-metadata")
+        project.processTestResources {
+            from buildProperties
+            from pluginMetadata
+        }
         Task bundle = project.tasks.create(name: 'bundlePlugin', type: Zip, dependsOn: [project.jar, buildProperties])
         bundle.configure {
             from buildProperties
+            from pluginMetadata
             from project.jar
             from bundle.project.configurations.runtime - bundle.project.configurations.provided
             from('src/main/packaging') // TODO: move all config/bin/_size/etc into packaging
