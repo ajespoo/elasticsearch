@@ -23,11 +23,13 @@ import org.elasticsearch.common.collect.Tuple;
 import org.elasticsearch.common.util.concurrent.ReleasableLock;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.BiFunction;
 import java.util.function.ToLongBiFunction;
 
 /**
@@ -172,7 +174,8 @@ public class Cache<K, V> {
         ReleasableLock readLock = new ReleasableLock(segmentLock.readLock());
         ReleasableLock writeLock = new ReleasableLock(segmentLock.writeLock());
 
-        Map<K, Entry<K, V>> map = new HashMap<>();
+        Map<K, CompletableFuture<Entry<K, V>>> map = new HashMap<>();
+
         SegmentStats segmentStats = new SegmentStats();
 
         /**
@@ -183,14 +186,28 @@ public class Cache<K, V> {
          * @return the entry if there was one, otherwise null
          */
         Entry<K, V> get(K key, long now) {
-            Entry<K, V> entry;
+            CompletableFuture<Entry<K, V>> future;
+            Entry<K, V> entry = null;
             try (ReleasableLock ignored = readLock.acquire()) {
-                entry = map.get(key);
+                future = map.get(key);
             }
-            if (entry != null) {
-                segmentStats.hit();
-                entry.accessTime = now;
-            } else {
+            if (future != null) {
+              try {
+                  entry = future.handle((ok, ex) -> {
+                      if (ok != null) {
+                          segmentStats.hit();
+                          ok.accessTime = now;
+                          return ok;
+                      } else {
+                          segmentStats.miss();
+                          return null;
+                      }
+                  }).get();
+              } catch (ExecutionException | InterruptedException e) {
+                  throw new IllegalStateException(e);
+              }
+            }
+            else {
                 segmentStats.miss();
             }
             return entry;
@@ -206,9 +223,22 @@ public class Cache<K, V> {
          */
         Tuple<Entry<K, V>, Entry<K, V>> put(K key, V value, long now) {
             Entry<K, V> entry = new Entry<>(key, value, now);
-            Entry<K, V> existing;
+            Entry<K, V> existing = null;
             try (ReleasableLock ignored = writeLock.acquire()) {
-                existing = map.put(key, entry);
+                try {
+                    CompletableFuture<Entry<K, V>> future = map.put(key, CompletableFuture.completedFuture(entry));
+                    if (future != null) {
+                        existing = future.handle((ok, ex) -> {
+                            if (ok != null) {
+                                return ok;
+                            } else {
+                                return null;
+                            }
+                        }).get();
+                    }
+                } catch (ExecutionException | InterruptedException e) {
+                    throw new IllegalStateException("future should be a completedFuture for which get should not throw", e);
+                }
             }
             return Tuple.tuple(entry, existing);
         }
@@ -220,12 +250,24 @@ public class Cache<K, V> {
          * @return the removed entry if there was one, otherwise null
          */
         Entry<K, V> remove(K key) {
-            Entry<K, V> entry;
+            CompletableFuture<Entry<K, V>> future;
+            Entry<K, V> entry = null;
             try (ReleasableLock ignored = writeLock.acquire()) {
-                entry = map.remove(key);
+                future = map.remove(key);
             }
-            if (entry != null) {
-                segmentStats.eviction();
+            if (future != null) {
+                try {
+                    entry = future.handle((ok, ex) -> {
+                        if (ok != null) {
+                            segmentStats.eviction();
+                            return ok;
+                        } else {
+                            return null;
+                        }
+                    }).get();
+                } catch (ExecutionException | InterruptedException e) {
+                    throw new IllegalStateException(e);
+                }
             }
             return entry;
         }
@@ -287,7 +329,8 @@ public class Cache<K, V> {
 
     /**
      * If the specified key is not already associated with a value (or is mapped to null), attempts to compute its
-     * value using the given mapping function and enters it into this map unless null.
+     * value using the given mapping function and enters it into this map unless null. The load method for a given key
+     * will be invoked at most once.
      *
      * @param key    the key whose associated value is to be returned or computed for if non-existant
      * @param loader the function to compute a value given a key
@@ -299,24 +342,62 @@ public class Cache<K, V> {
         long now = now();
         V value = get(key, now);
         if (value == null) {
+            // we need to synchronize loading of a value for a given key; however, holding the segment lock while
+            // invoking load can lead to deadlock against another thread due to dependent key loading; therefore, we
+            // need a mechanism to ensure that load is invoked at most once, but we are not invoking load while holding
+            // the segment lock; to do this, we atomically put a future in the map that can load the value, and then
+            // get the value from this future on the thread that won the race to place the future into the segment map
             CacheSegment<K, V> segment = getCacheSegment(key);
-            // we synchronize against the segment lock; this is to avoid a scenario where another thread is inserting
-            // a value for the same key via put which would not be observed on this thread without a mechanism
-            // synchronizing the two threads; it is possible that the segment lock will be too expensive here (it blocks
-            // readers too!) so consider this as a possible place to optimize should contention be observed
+            CompletableFuture<Entry<K, V>> future;
+            CompletableFuture<Entry<K, V>> completableFuture = new CompletableFuture<>();
+
             try (ReleasableLock ignored = segment.writeLock.acquire()) {
-                value = get(key, now);
-                if (value == null) {
-                    try {
-                        value = loader.load(key);
-                    } catch (Exception e) {
-                        throw new ExecutionException(e);
+                future = segment.map.putIfAbsent(key, completableFuture);
+            }
+
+            BiFunction<? super Entry<K, V>, Throwable, ? extends V> handler = (ok, ex) -> {
+                if (ok != null) {
+                    try (ReleasableLock ignored = lruLock.acquire()) {
+                        promote(ok, now);
                     }
-                    if (value == null) {
-                        throw new ExecutionException(new NullPointerException("loader returned a null value"));
+                    return ok.value;
+                } else {
+                    try (ReleasableLock ignored = segment.writeLock.acquire()) {
+                        CompletableFuture<Entry<K, V>> sanity = segment.map.get(key);
+                        if (sanity != null && sanity.isCompletedExceptionally()) {
+                            segment.map.remove(key);
+                        }
                     }
-                    put(key, value, now);
+                    return null;
                 }
+            };
+
+            CompletableFuture<V> completableValue;
+            if (future == null) {
+                future = completableFuture;
+                completableValue = future.handle(handler);
+                V loaded;
+                try {
+                    loaded = loader.load(key);
+                } catch (Exception e) {
+                    future.completeExceptionally(e);
+                    throw new ExecutionException(e);
+                }
+                if (loaded == null) {
+                    NullPointerException npe = new NullPointerException("loader returned a null value");
+                    future.completeExceptionally(npe);
+                    throw new ExecutionException(npe);
+                } else {
+                    future.complete(new Entry<>(key, loaded, now));
+                }
+            } else {
+                completableValue = future.handle(handler);
+            }
+
+            try {
+                value = completableValue.get();
+            } catch (InterruptedException e) {
+                throw new IllegalStateException(e);
             }
         }
         return value;

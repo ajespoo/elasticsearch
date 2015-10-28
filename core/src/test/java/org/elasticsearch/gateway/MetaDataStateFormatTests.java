@@ -31,7 +31,6 @@ import org.elasticsearch.Version;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.cluster.metadata.MetaData;
 import org.elasticsearch.common.collect.ImmutableOpenMap;
-import org.elasticsearch.common.collect.Iterators;
 import org.elasticsearch.common.io.FileSystemUtils;
 import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.xcontent.ToXContent;
@@ -40,10 +39,9 @@ import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.common.xcontent.XContentParser;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.test.ESTestCase;
-import org.junit.Test;
 
-import java.io.InputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
@@ -69,8 +67,6 @@ import static org.hamcrest.Matchers.startsWith;
 
 @LuceneTestCase.SuppressFileSystems("ExtrasFS") // TODO: fix test to work with ExtrasFS
 public class MetaDataStateFormatTests extends ESTestCase {
-
-
     /**
      * Ensure we can read a pre-generated cluster state.
      */
@@ -139,7 +135,6 @@ public class MetaDataStateFormatTests extends ESTestCase {
         }
     }
 
-    @Test
     public void testVersionMismatch() throws IOException {
         Path[] dirs = new Path[randomIntBetween(1, 5)];
         for (int i = 0; i < dirs.length; i++) {
@@ -209,7 +204,7 @@ public class MetaDataStateFormatTests extends ESTestCase {
                 long filePointer = raf.position();
                 ByteBuffer bb = ByteBuffer.wrap(new byte[1]);
                 raf.read(bb);
-                
+
                 bb.flip();
                 byte oldValue = bb.get(0);
                 byte newValue = (byte) ~oldValue;
@@ -316,7 +311,6 @@ public class MetaDataStateFormatTests extends ESTestCase {
         assertEquals(state.clusterUUID(), uuid);
     }
 
-    @Test
     public void testLoadState() throws IOException {
         final ToXContent.Params params = ToXContent.EMPTY_PARAMS;
         final Path[] dirs = new Path[randomIntBetween(1, 5)];
@@ -365,9 +359,9 @@ public class MetaDataStateFormatTests extends ESTestCase {
         for (IndexMetaData original : latestMetaData) {
             IndexMetaData deserialized = indices.get(original.getIndex());
             assertThat(deserialized, notNullValue());
-            assertThat(deserialized.version(), equalTo(original.version()));
-            assertThat(deserialized.numberOfReplicas(), equalTo(original.numberOfReplicas()));
-            assertThat(deserialized.numberOfShards(), equalTo(original.numberOfShards()));
+            assertThat(deserialized.getVersion(), equalTo(original.getVersion()));
+            assertThat(deserialized.getNumberOfReplicas(), equalTo(original.getNumberOfReplicas()));
+            assertThat(deserialized.getNumberOfShards(), equalTo(original.getNumberOfShards()));
         }
 
         // now corrupt all the latest ones and make sure we fail to load the state
@@ -490,9 +484,9 @@ public class MetaDataStateFormatTests extends ESTestCase {
             long temp;
             result = string.hashCode();
             result = 31 * result + aInt;
-            result = 31 * result + (int) (aLong ^ (aLong >>> 32));
+            result = 31 * result + Long.hashCode(aLong);
             temp = Double.doubleToLongBits(aDouble);
-            result = 31 * result + (int) (temp ^ (temp >>> 32));
+            result = 31 * result + Long.hashCode(temp);
             result = 31 * result + (aBoolean ? 1 : 0);
             return result;
         }

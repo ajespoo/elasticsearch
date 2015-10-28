@@ -50,9 +50,9 @@ import org.elasticsearch.discovery.DiscoverySettings;
 import org.elasticsearch.gateway.GatewayService;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.index.shard.ShardId;
+import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.search.warmer.IndexWarmersMetaData;
 import org.elasticsearch.test.ESIntegTestCase;
-import org.junit.Test;
 
 import java.util.Collections;
 import java.util.List;
@@ -70,8 +70,6 @@ import static org.hamcrest.Matchers.is;
 
 @ESIntegTestCase.ClusterScope(scope = ESIntegTestCase.Scope.SUITE, numDataNodes = 0, numClientNodes = 0)
 public class ClusterStateDiffIT extends ESIntegTestCase {
-
-    @Test
     public void testClusterStateDiffSerialization() throws Exception {
         DiscoveryNode masterNode = new DiscoveryNode("master", new LocalTransportAddress("master"), Version.CURRENT);
         DiscoveryNode otherNode = new DiscoveryNode("other", new LocalTransportAddress("other"), Version.CURRENT);
@@ -510,17 +508,17 @@ public class ClusterStateDiffIT extends ESIntegTestCase {
                 IndexMetaData.Builder builder = IndexMetaData.builder(part);
                 switch (randomIntBetween(0, 3)) {
                     case 0:
-                        builder.settings(Settings.builder().put(part.settings()).put(randomSettings(Settings.EMPTY)));
+                        builder.settings(Settings.builder().put(part.getSettings()).put(randomSettings(Settings.EMPTY)));
                         break;
                     case 1:
-                        if (randomBoolean() && part.aliases().isEmpty() == false) {
-                            builder.removeAlias(randomFrom(part.aliases().keys().toArray(String.class)));
+                        if (randomBoolean() && part.getAliases().isEmpty() == false) {
+                            builder.removeAlias(randomFrom(part.getAliases().keys().toArray(String.class)));
                         } else {
                             builder.putAlias(AliasMetaData.builder(randomAsciiOfLength(10)));
                         }
                         break;
                     case 2:
-                        builder.settings(Settings.builder().put(part.settings()).put(IndexMetaData.SETTING_INDEX_UUID, Strings.randomBase64UUID()));
+                        builder.settings(Settings.builder().put(part.getSettings()).put(IndexMetaData.SETTING_INDEX_UUID, Strings.randomBase64UUID()));
                         break;
                     case 3:
                         builder.putCustom(IndexWarmersMetaData.TYPE, randomWarmers());
@@ -543,7 +541,7 @@ public class ClusterStateDiffIT extends ESIntegTestCase {
                             randomName("warm"),
                             new String[]{randomName("type")},
                             randomBoolean(),
-                            new BytesArray(randomAsciiOfLength(1000)))
+                            new IndexWarmersMetaData.SearchSource(new BytesArray(randomAsciiOfLength(1000))))
             );
         } else {
             return new IndexWarmersMetaData();

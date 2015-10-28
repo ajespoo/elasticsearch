@@ -25,15 +25,12 @@ import org.apache.lucene.index.SnapshotDeletionPolicy;
 import org.apache.lucene.search.QueryCache;
 import org.apache.lucene.search.QueryCachingPolicy;
 import org.apache.lucene.search.similarities.Similarity;
-import org.apache.lucene.util.SetOnce;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.unit.ByteSizeUnit;
 import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.index.codec.CodecService;
 import org.elasticsearch.index.indexing.ShardIndexingService;
-import org.elasticsearch.index.shard.IndexSearcherWrapper;
 import org.elasticsearch.index.shard.MergeSchedulerConfig;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.index.shard.TranslogRecoveryPerformer;
@@ -60,11 +57,11 @@ public final class EngineConfig {
     private volatile boolean compoundOnFlush = true;
     private long gcDeletesInMillis = DEFAULT_GC_DELETES.millis();
     private volatile boolean enableGcDeletes = true;
+    private final TimeValue flushMergesAfter;
     private final String codecName;
     private final ThreadPool threadPool;
     private final ShardIndexingService indexingService;
-    @Nullable
-    private final IndicesWarmer warmer;
+    private final Engine.Warmer warmer;
     private final Store store;
     private final SnapshotDeletionPolicy deletionPolicy;
     private final MergePolicy mergePolicy;
@@ -72,11 +69,10 @@ public final class EngineConfig {
     private final Analyzer analyzer;
     private final Similarity similarity;
     private final CodecService codecService;
-    private final Engine.FailedEngineListener failedEngineListener;
+    private final Engine.EventListener eventListener;
     private final boolean forceNewTranslog;
     private final QueryCache queryCache;
     private final QueryCachingPolicy queryCachingPolicy;
-    private final SetOnce<IndexSearcherWrapper> searcherWrapper = new SetOnce<>();
 
     /**
      * Index setting for compound file on flush. This setting is realtime updateable.
@@ -119,15 +115,15 @@ public final class EngineConfig {
      * Creates a new {@link org.elasticsearch.index.engine.EngineConfig}
      */
     public EngineConfig(ShardId shardId, ThreadPool threadPool, ShardIndexingService indexingService,
-                        Settings indexSettings, IndicesWarmer warmer, Store store, SnapshotDeletionPolicy deletionPolicy,
+                        Settings indexSettings, Engine.Warmer warmer, Store store, SnapshotDeletionPolicy deletionPolicy,
                         MergePolicy mergePolicy, MergeSchedulerConfig mergeSchedulerConfig, Analyzer analyzer,
-                        Similarity similarity, CodecService codecService, Engine.FailedEngineListener failedEngineListener,
-                        TranslogRecoveryPerformer translogRecoveryPerformer, QueryCache queryCache, QueryCachingPolicy queryCachingPolicy, TranslogConfig translogConfig) {
+                        Similarity similarity, CodecService codecService, Engine.EventListener eventListener,
+                        TranslogRecoveryPerformer translogRecoveryPerformer, QueryCache queryCache, QueryCachingPolicy queryCachingPolicy, TranslogConfig translogConfig, TimeValue flushMergesAfter) {
         this.shardId = shardId;
         this.indexSettings = indexSettings;
         this.threadPool = threadPool;
         this.indexingService = indexingService;
-        this.warmer = warmer;
+        this.warmer = warmer == null ? (a,b) -> {} : warmer;
         this.store = store;
         this.deletionPolicy = deletionPolicy;
         this.mergePolicy = mergePolicy;
@@ -135,7 +131,7 @@ public final class EngineConfig {
         this.analyzer = analyzer;
         this.similarity = similarity;
         this.codecService = codecService;
-        this.failedEngineListener = failedEngineListener;
+        this.eventListener = eventListener;
         this.compoundOnFlush = indexSettings.getAsBoolean(EngineConfig.INDEX_COMPOUND_ON_FLUSH, compoundOnFlush);
         codecName = indexSettings.get(EngineConfig.INDEX_CODEC_SETTING, EngineConfig.DEFAULT_CODEC_NAME);
         // We start up inactive and rely on IndexingMemoryController to give us our fair share once we start indexing:
@@ -148,6 +144,7 @@ public final class EngineConfig {
         this.queryCache = queryCache;
         this.queryCachingPolicy = queryCachingPolicy;
         this.translogConfig = translogConfig;
+        this.flushMergesAfter = flushMergesAfter;
     }
 
     /** updates {@link #versionMapSize} based on current setting and {@link #indexingBufferSize} */
@@ -250,7 +247,7 @@ public final class EngineConfig {
 
     /**
      * Returns a thread-pool mainly used to get estimated time stamps from {@link org.elasticsearch.threadpool.ThreadPool#estimatedTimeInMillis()} and to schedule
-     * async force merge calls on the {@link org.elasticsearch.threadpool.ThreadPool.Names#OPTIMIZE} thread-pool
+     * async force merge calls on the {@link org.elasticsearch.threadpool.ThreadPool.Names#FORCE_MERGE} thread-pool
      */
     public ThreadPool getThreadPool() {
         return threadPool;
@@ -269,11 +266,9 @@ public final class EngineConfig {
     }
 
     /**
-     * Returns an {@link org.elasticsearch.indices.IndicesWarmer} used to warm new searchers before they are used for searching.
-     * Note: This method might retrun <code>null</code>
+     * Returns an {@link org.elasticsearch.index.engine.Engine.Warmer} used to warm new searchers before they are used for searching.
      */
-    @Nullable
-    public IndicesWarmer getWarmer() {
+    public Engine.Warmer getWarmer() {
         return warmer;
     }
 
@@ -314,8 +309,8 @@ public final class EngineConfig {
     /**
      * Returns a listener that should be called on engine failure
      */
-    public Engine.FailedEngineListener getFailedEngineListener() {
-        return failedEngineListener;
+    public Engine.EventListener getEventListener() {
+        return eventListener;
     }
 
     /**
@@ -403,4 +398,12 @@ public final class EngineConfig {
     public boolean isCreate() {
         return create;
     }
+
+    /**
+     * Returns a {@link TimeValue} at what time interval after the last write modification to the engine finished merges
+     * should be automatically flushed. This is used to free up transient disk usage of potentially large segments that
+     * are written after the engine became inactive from an indexing perspective.
+     */
+    public TimeValue getFlushMergesAfter() { return flushMergesAfter; }
+
 }

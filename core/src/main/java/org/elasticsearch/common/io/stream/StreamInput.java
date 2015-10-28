@@ -460,11 +460,29 @@ public abstract class StreamInput extends InputStream {
         return values;
     }
 
+    public int[] readVIntArray() throws IOException {
+        int length = readVInt();
+        int[] values = new int[length];
+        for (int i = 0; i < length; i++) {
+            values[i] = readVInt();
+        }
+        return values;
+    }
+
     public long[] readLongArray() throws IOException {
         int length = readVInt();
         long[] values = new long[length];
         for (int i = 0; i < length; i++) {
             values[i] = readLong();
+        }
+        return values;
+    }
+
+    public long[] readVLongArray() throws IOException {
+        int length = readVInt();
+        long[] values = new long[length];
+        for (int i = 0; i < length; i++) {
+            values[i] = readVLong();
         }
         return values;
     }
@@ -584,7 +602,7 @@ public abstract class StreamInput extends InputStream {
      * Use {@link FilterInputStream} instead which wraps a stream and supports a {@link NamedWriteableRegistry} too.
      */
     <C> C readNamedWriteable(@SuppressWarnings("unused") Class<C> categoryClass) throws IOException {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("can't read named writeable from StreamInput");
     }
 
     /**

@@ -262,7 +262,7 @@ public class BalancedShardsAllocator extends AbstractComponent implements Shards
          * Returns the average of shards per node for the given index
          */
         public float avgShardsPerNode(String index) {
-            return ((float) metaData.index(index).totalNumberOfShards()) / nodes.size();
+            return ((float) metaData.index(index).getTotalNumberOfShards()) / nodes.size();
         }
 
         /**
@@ -511,7 +511,9 @@ public class BalancedShardsAllocator extends AbstractComponent implements Shards
                         continue;
                     }
                     RoutingNode target = routingNodes.node(currentNode.getNodeId());
-                    Decision decision = allocation.deciders().canAllocate(shard, target, allocation);
+                    Decision allocationDecision = allocation.deciders().canAllocate(shard, target, allocation);
+                    Decision rebalanceDecision = allocation.deciders().canRebalance(shard, allocation);
+                    Decision decision = new Decision.Multi().add(allocationDecision).add(rebalanceDecision);
                     if (decision.type() == Type.YES) { // TODO maybe we can respect throttling here too?
                         sourceNode.removeShard(shard);
                         ShardRouting targetRelocatingShard = routingNodes.relocate(shard, target.nodeId(), allocation.clusterInfo().getShardSize(shard, ShardRouting.UNAVAILABLE_EXPECTED_SHARD_SIZE));

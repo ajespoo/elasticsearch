@@ -20,58 +20,70 @@
 package org.elasticsearch.index.translog;
 
 import com.carrotsearch.randomizedtesting.generators.RandomPicks;
+
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.ByteArrayDataOutput;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.LuceneTestCase;
-import org.apache.lucene.util.TestUtil;
 import org.elasticsearch.ElasticsearchException;
-import org.elasticsearch.Version;
+import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.io.FileSystemUtils;
 import org.elasticsearch.common.io.stream.BytesStreamOutput;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.common.util.BigArrays;
 import org.elasticsearch.common.util.concurrent.AbstractRunnable;
 import org.elasticsearch.common.util.concurrent.ConcurrentCollections;
 import org.elasticsearch.index.Index;
+import org.elasticsearch.index.IndexSettings;
 import org.elasticsearch.index.VersionType;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.test.ESTestCase;
+import org.elasticsearch.test.IndexSettingsModule;
 import org.hamcrest.Matchers;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Test;
 
 import java.io.EOFException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
-import java.nio.file.*;
-import java.util.*;
-import java.util.concurrent.*;
+import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThan;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 
 /**
  *
  */
 @LuceneTestCase.SuppressFileSystems("ExtrasFS")
 public class TranslogTests extends ESTestCase {
-
-    private static final Pattern PARSE_LEGACY_ID_PATTERN = Pattern.compile("^" + Translog.TRANSLOG_FILE_PREFIX + "(\\d+)((\\.recovering))?$");
 
     protected final ShardId shardId = new ShardId(new Index("index"), 1);
 
@@ -117,8 +129,9 @@ public class TranslogTests extends ESTestCase {
     protected Translog create(Path path) throws IOException {
         Settings build = Settings.settingsBuilder()
                 .put(TranslogConfig.INDEX_TRANSLOG_FS_TYPE, TranslogWriter.Type.SIMPLE.name())
+                .put(IndexMetaData.SETTING_VERSION_CREATED, org.elasticsearch.Version.CURRENT)
                 .build();
-        TranslogConfig translogConfig = new TranslogConfig(shardId, path, build, Translog.Durabilty.REQUEST, BigArrays.NON_RECYCLING_INSTANCE, null);
+        TranslogConfig translogConfig = new TranslogConfig(shardId, path, IndexSettingsModule.newIndexSettings(shardId.index(), build, Collections.EMPTY_LIST), Translog.Durabilty.REQUEST, BigArrays.NON_RECYCLING_INSTANCE, null);
         return new Translog(translogConfig);
     }
 
@@ -182,7 +195,6 @@ public class TranslogTests extends ESTestCase {
         return string;
     }
 
-    @Test
     public void testRead() throws IOException {
         Translog.Location loc1 = translog.add(new Translog.Index("test", "1", new byte[]{1}));
         Translog.Location loc2 = translog.add(new Translog.Index("test", "2", new byte[]{2}));
@@ -209,7 +221,6 @@ public class TranslogTests extends ESTestCase {
         }
     }
 
-    @Test
     public void testSimpleOperations() throws IOException {
         ArrayList<Translog.Operation> ops = new ArrayList<>();
         Translog.Snapshot snapshot = translog.newSnapshot();
@@ -272,7 +283,6 @@ public class TranslogTests extends ESTestCase {
         return stats;
     }
 
-    @Test
     public void testStats() throws IOException {
         final long firstOperationPosition = translog.getFirstOperationPosition();
         TranslogStats stats = stats();
@@ -336,7 +346,6 @@ public class TranslogTests extends ESTestCase {
         }
     }
 
-    @Test
     public void testSnapshot() {
         ArrayList<Translog.Operation> ops = new ArrayList<>();
         Translog.Snapshot snapshot = translog.newSnapshot();
@@ -363,7 +372,6 @@ public class TranslogTests extends ESTestCase {
         snapshot1.close();
     }
 
-    @Test
     public void testSnapshotWithNewTranslog() throws IOException {
         ArrayList<Translog.Operation> ops = new ArrayList<>();
         Translog.Snapshot snapshot = translog.newSnapshot();
@@ -401,8 +409,7 @@ public class TranslogTests extends ESTestCase {
         }
     }
 
-    @Test
-    public void deleteOnSnapshotRelease() throws Exception {
+    public void testDeleteOnSnapshotRelease() throws Exception {
         ArrayList<Translog.Operation> firstOps = new ArrayList<>();
         addToTranslogAndList(translog, firstOps, new Translog.Index("test", "1", new byte[]{1}));
 
@@ -457,7 +464,6 @@ public class TranslogTests extends ESTestCase {
 
     }
 
-    @Test
     public void testConcurrentWritesWithVaryingSize() throws Throwable {
         final int opsPerThread = randomIntBetween(10, 200);
         int threadCount = 2 + randomInt(5);
@@ -543,7 +549,6 @@ public class TranslogTests extends ESTestCase {
 
     }
 
-    @Test
     public void testTranslogChecksums() throws Exception {
         List<Translog.Location> locations = new ArrayList<>();
 
@@ -567,7 +572,6 @@ public class TranslogTests extends ESTestCase {
         assertThat("at least one corruption was caused and caught", corruptionsCaught.get(), greaterThanOrEqualTo(1));
     }
 
-    @Test
     public void testTruncatedTranslogs() throws Exception {
         List<Translog.Location> locations = new ArrayList<>();
 
@@ -634,8 +638,6 @@ public class TranslogTests extends ESTestCase {
         return new Term("_uid", id);
     }
 
-
-    @Test
     public void testVerifyTranslogIsNotDeleted() throws IOException {
         assertFileIsPresent(translog, 1);
         translog.add(new Translog.Index("test", "1", new byte[]{1}));
@@ -655,7 +657,6 @@ public class TranslogTests extends ESTestCase {
     }
 
     /** Tests that concurrent readers and writes maintain view and snapshot semantics */
-    @Test
     public void testConcurrentWriteViewsAndSnapshot() throws Throwable {
         final Thread[] writers = new Thread[randomIntBetween(1, 10)];
         final Thread[] readers = new Thread[randomIntBetween(1, 10)];

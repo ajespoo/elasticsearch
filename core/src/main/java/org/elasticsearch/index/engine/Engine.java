@@ -54,6 +54,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -72,13 +73,14 @@ public abstract class Engine implements Closeable {
     protected final EngineConfig engineConfig;
     protected final Store store;
     protected final AtomicBoolean isClosed = new AtomicBoolean(false);
-    protected final FailedEngineListener failedEngineListener;
+    protected final EventListener eventListener;
     protected final SnapshotDeletionPolicy deletionPolicy;
     protected final ReentrantLock failEngineLock = new ReentrantLock();
     protected final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
     protected final ReleasableLock readLock = new ReleasableLock(rwl.readLock());
     protected final ReleasableLock writeLock = new ReleasableLock(rwl.writeLock());
     protected volatile Throwable failedEngine = null;
+    protected volatile long lastWriteNanos = Long.MAX_VALUE; // no write yet!
 
     protected Engine(EngineConfig engineConfig) {
         Objects.requireNonNull(engineConfig.getStore(), "Store must be provided to the engine");
@@ -89,7 +91,7 @@ public abstract class Engine implements Closeable {
         this.store = engineConfig.getStore();
         this.logger = Loggers.getLogger(Engine.class, // we use the engine class directly here to make sure all subclasses have the same logger name
                 engineConfig.getIndexSettings(), engineConfig.getShardId());
-        this.failedEngineListener = engineConfig.getFailedEngineListener();
+        this.eventListener = engineConfig.getEventListener();
         this.deletionPolicy = engineConfig.getDeletionPolicy();
     }
 
@@ -535,7 +537,7 @@ public abstract class Engine implements Closeable {
                             logger.warn("Couldn't mark store corrupted", e);
                         }
                     }
-                    failedEngineListener.onFailedEngine(shardId, reason, failure);
+                    eventListener.onFailedEngine(reason, failure);
                 }
             } catch (Throwable t) {
                 // don't bubble up these exceptions up
@@ -560,19 +562,12 @@ public abstract class Engine implements Closeable {
         return false;
     }
 
-    /** Wrap a Throwable in an {@code EngineClosedException} if the engine is already closed */
-    protected Throwable wrapIfClosed(Throwable t) {
-        if (isClosed.get()) {
-            if (t != failedEngine && failedEngine != null) {
-                t.addSuppressed(failedEngine);
-            }
-            return new EngineClosedException(shardId, t);
-        }
-        return t;
-    }
 
-    public interface FailedEngineListener {
-        void onFailedEngine(ShardId shardId, String reason, @Nullable Throwable t);
+    public interface EventListener {
+        /**
+         * Called when a fatal exception occurred
+         */
+        default void onFailedEngine(String reason, @Nullable Throwable t) {}
     }
 
     public static class Searcher implements Releasable {
@@ -594,6 +589,13 @@ public abstract class Engine implements Closeable {
 
         public IndexReader reader() {
             return searcher.getIndexReader();
+        }
+
+        public DirectoryReader getDirectoryReader() {
+            if (reader() instanceof  DirectoryReader) {
+                return (DirectoryReader) reader();
+            }
+            throw new IllegalStateException("Can't use " + reader().getClass() + " as a directory reader");
         }
 
         public IndexSearcher searcher() {
@@ -984,11 +986,6 @@ public abstract class Engine implements Closeable {
         }
     }
 
-    /**
-     * Returns <code>true</code> the internal writer has any uncommitted changes. Otherwise <code>false</code>
-     */
-    public abstract boolean hasUncommittedChanges();
-
     public static class CommitId implements Writeable {
 
         private final byte[] id;
@@ -1047,5 +1044,30 @@ public abstract class Engine implements Closeable {
     }
 
     public void onSettingsChanged() {
+    }
+
+    /**
+     * Returns the timestamp of the last write in nanoseconds.
+     * Note: this time might not be absolutely accurate since the {@link Operation#startTime()} is used which might be
+     * slightly inaccurate.
+     * @see System#nanoTime()
+     * @see Operation#startTime()
+     */
+    public long getLastWriteNanos() {
+        return this.lastWriteNanos;
+    }
+
+    /**
+     * Called for each new opened engine searcher to warm new segments
+     * @see EngineConfig#getWarmer()
+     */
+    public interface Warmer {
+        /**
+         * Called once a new Searcher is opened.
+         * @param searcher the searcer to warm
+         * @param isTopLevelReader <code>true</code> iff the searcher is build from a top-level reader.
+         *                         Otherwise the searcher might be build from a leaf reader to warm in isolation
+         */
+        void warm(Engine.Searcher searcher, boolean isTopLevelReader);
     }
 }

@@ -41,7 +41,6 @@ import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.rest.RestStatus;
 import org.elasticsearch.test.ESTestCase;
 import org.hamcrest.Matchers;
-import org.junit.Test;
 
 import java.io.IOException;
 
@@ -158,14 +157,13 @@ public class ClusterHealthResponsesTests extends ESTestCase {
     }
 
     IndexRoutingTable genIndexRoutingTable(IndexMetaData indexMetaData, ShardCounter counter) {
-        IndexRoutingTable.Builder builder = IndexRoutingTable.builder(indexMetaData.index());
-        for (int shard = 0; shard < indexMetaData.numberOfShards(); shard++) {
-            builder.addIndexShard(genShardRoutingTable(indexMetaData.index(), shard, indexMetaData.getNumberOfReplicas(), counter));
+        IndexRoutingTable.Builder builder = IndexRoutingTable.builder(indexMetaData.getIndex());
+        for (int shard = 0; shard < indexMetaData.getNumberOfShards(); shard++) {
+            builder.addIndexShard(genShardRoutingTable(indexMetaData.getIndex(), shard, indexMetaData.getNumberOfReplicas(), counter));
         }
         return builder.build();
     }
 
-    @Test
     public void testClusterIndexHealth() {
         int numberOfShards = randomInt(3) + 1;
         int numberOfReplicas = randomInt(4);
@@ -200,7 +198,6 @@ public class ClusterHealthResponsesTests extends ESTestCase {
         }
     }
 
-    @Test
     public void testClusterHealth() throws IOException {
         ShardCounter counter = new ShardCounter();
         RoutingTable.Builder routingTable = RoutingTable.builder();
@@ -239,7 +236,6 @@ public class ClusterHealthResponsesTests extends ESTestCase {
         return clusterHealth;
     }
 
-    @Test
     public void testValidations() throws IOException {
         IndexMetaData indexMetaData = IndexMetaData.builder("test").settings(settings(Version.CURRENT)).numberOfShards(2).numberOfReplicas(2).build();
         ShardCounter counter = new ShardCounter();

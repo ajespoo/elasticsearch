@@ -22,7 +22,6 @@ package org.elasticsearch.index.query;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.queryparser.classic.MapperQueryParser;
 import org.apache.lucene.queryparser.classic.QueryParserSettings;
-import org.apache.lucene.search.Filter;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.join.BitSetProducer;
 import org.apache.lucene.search.similarities.Similarity;
@@ -84,8 +83,6 @@ public class QueryShardContext {
         typesContext.remove();
     }
 
-    private final Index index;
-
     private final Version indexVersionCreated;
 
     private final IndexQueryParserService indexQueryParser;
@@ -104,9 +101,8 @@ public class QueryShardContext {
 
     boolean isFilter;
 
-    public QueryShardContext(Index index, IndexQueryParserService indexQueryParser) {
-        this.index = index;
-        this.indexVersionCreated = Version.indexCreated(indexQueryParser.indexSettings());
+    public QueryShardContext(IndexQueryParserService indexQueryParser) {
+        this.indexVersionCreated = indexQueryParser.getIndexCreatedVersion();
         this.indexQueryParser = indexQueryParser;
         this.parseContext = new QueryParseContext(indexQueryParser.indicesQueriesRegistry());
     }
@@ -133,7 +129,7 @@ public class QueryShardContext {
     }
 
     public Index index() {
-        return this.index;
+        return this.indexQueryParser.index();
     }
 
     public IndexQueryParserService indexQueryParserService() {
@@ -177,7 +173,7 @@ public class QueryShardContext {
         return queryParser;
     }
 
-    public BitSetProducer bitsetFilter(Filter filter) {
+    public BitSetProducer bitsetFilter(Query filter) {
         return indexQueryParser.bitsetFilterCache.getBitSetProducer(filter);
     }
 
