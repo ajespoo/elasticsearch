@@ -29,7 +29,7 @@ repositories {
 dependencies {
   compile gradleApi()
   compile localGroovy()
-  compile 'com.carrotsearch.randomizedtesting:junit4-ant:2.1.17'
+  compile 'com.carrotsearch.randomizedtesting:junit4-ant:2.2.0'
   compile('junit:junit:4.11') {
     transitive = false
   }

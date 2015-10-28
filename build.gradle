@@ -90,11 +90,11 @@ allprojects {
     sourceCompatibility = JavaVersion.VERSION_1_8
     targetCompatibility = sourceCompatibility
 
-    luceneSnapshotRevision = '1702855'
+    luceneSnapshotRevision = '1710880'
     // dependency versions that are used in more than one place
     versions = [
       lucene:             "5.4.0-snapshot-${luceneSnapshotRevision}",
-      randomizedrunner:   "2.1.17",
+      randomizedrunner:   '2.2.0',
       httpclient:         '4.3.6'
     ]
   }

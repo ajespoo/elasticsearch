@@ -22,3 +22,4 @@ esplugin {
   classname 'org.elasticsearch.plugin.discovery.multicast.MulticastDiscoveryPlugin'
 }
 
+compileJava.options.compilerArgs << "-Xlint:-deprecation"

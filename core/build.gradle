@@ -65,7 +65,7 @@ dependencies {
   }
   compile "com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:${versions.jackson}"
   // network stack
-  compile 'io.netty:netty:3.10.3.Final'
+  compile 'io.netty:netty:3.10.5.Final'
   // compression of transport protocol
   compile 'com.ning:compress-lzf:1.0.2'
   // percentiles aggregation
@@ -74,7 +74,7 @@ dependencies {
   compile 'org.hdrhistogram:HdrHistogram:2.1.6'
 
   // lucene spatial
-  compile 'com.spatial4j:spatial4j:0.4.1', optional
+  compile 'com.spatial4j:spatial4j:0.5', optional
   compile 'com.vividsolutions:jts:1.13', optional
 
   // templating
