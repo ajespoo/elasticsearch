@@ -33,7 +33,7 @@ dependencies {
   compile('junit:junit:4.11') {
     transitive = false
   }
-  compile 'com.netflix.nebula:gradle-extra-configurations-plugin:3.0.2'
+  compile 'com.netflix.nebula:gradle-extra-configurations-plugin:3.0.3'
   compile 'de.thetaphi:forbiddenapis:2.0'
 }
 

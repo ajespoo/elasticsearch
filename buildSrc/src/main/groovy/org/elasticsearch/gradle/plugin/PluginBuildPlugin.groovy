@@ -67,8 +67,17 @@ class PluginBuildPlugin extends BuildPlugin {
         String elasticsearchVersion = ElasticsearchProperties.version
         project.dependencies {
             provided "org.elasticsearch:elasticsearch:${elasticsearchVersion}"
-            //compile project.configurations.provided
             testCompile "org.elasticsearch:test-framework:${elasticsearchVersion}"
+            // we "upgrade" these optional deps to provided for plugins, since they will run
+            // with a full elasticsearch server that includes optional deps
+            // TODO: remove duplication of version here with core...
+            provided 'com.spatial4j:spatial4j:0.4.1'
+            provided 'com.vividsolutions:jts:1.13'
+            provided 'com.github.spullara.mustache.java:compiler:0.9.1'
+            provided "log4j:log4j:1.2.17"
+            provided "log4j:apache-log4j-extras:1.2.17"
+            provided "org.slf4j:slf4j-api:1.6.2"
+            provided 'net.java.dev.jna:jna:4.1.0'
         }
     }
 

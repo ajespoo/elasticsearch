@@ -126,24 +126,3 @@ Task copyRestSpec = RestSpecHack.configureTask(project, true)
 integTest.dependsOn copyRestSpec
 test.dependsOn copyRestSpec
 
-// this is a hack to bypass an issue with the nebula.optional-base plugin
-// not configuring optional for all repositories, see
-// https://github.com/nebula-plugins/gradle-extra-configurations-plugin/pull/23
-project.afterEvaluate {
-  def installers = project.tasks.install.repositories
-  def deployers = project.tasks.uploadArchives.repositories
-
-  installers.plus(deployers)*.pom*.whenConfigured { pom ->
-    project.ext.optionalDeps.each { optionalDep ->
-      pom.dependencies.find {
-        dep -> dep.groupId == optionalDep.group && dep.artifactId == optionalDep.name
-      }.optional = true
-    }
-  }
-  // this is not done by the extra config plugin, but should be
-  project.configurations { configsContainer ->
-    project.ext.optionalDeps.each { optionalDep ->
-      configsContainer.runtime.exclude group: optionalDep.group, module: optionalDep.name
-    }
-  }
-}
