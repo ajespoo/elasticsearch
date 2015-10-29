@@ -37,6 +37,7 @@ task copySourceFiles(type: Sync) {
    include 'java/org/elasticsearch/bootstrap/MockPluginPolicy.java'
    include 'java/org/elasticsearch/common/cli/CliToolTestCase.java'
    include 'java/org/elasticsearch/cluster/MockInternalClusterInfoService.java'
+   include 'java/org/elasticsearch/cluster/routing/TestShardRouting.java'
    include 'java/org/elasticsearch/index/MockEngineFactoryPlugin.java'
    include 'java/org/elasticsearch/search/MockSearchService.java'
    include 'java/org/elasticsearch/search/aggregations/bucket/AbstractTermsTestCase.java'

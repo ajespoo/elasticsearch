@@ -46,6 +46,7 @@ class BuildPlugin implements Plugin<Project> {
             // fail on all javac warnings
             project.tasks.withType(JavaCompile) {
                 options.compilerArgs << '-Werror' << '-Xlint:all' << '-Xdoclint:all/private' << '-Xdoclint:-missing'
+                options.encoding = 'UTF-8'
             }
         }
     }
