@@ -49,6 +49,7 @@ import org.junit.Before;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
@@ -91,7 +92,7 @@ public class NettyHttpChannelTests extends ESTestCase {
         NettyHttpRequest request = new NettyHttpRequest(httpRequest, writeCapturingChannel);
 
         // send a response
-        NettyHttpChannel channel = new NettyHttpChannel(httpServerTransport, request, null, randomBoolean());
+        NettyHttpChannel channel = new NettyHttpChannel(httpServerTransport, request, null, randomBoolean(), Optional.empty());
         channel.sendResponse(new TestReponse());
 
         // inspect what was written
@@ -114,7 +115,7 @@ public class NettyHttpChannelTests extends ESTestCase {
         WriteCapturingChannel writeCapturingChannel = new WriteCapturingChannel();
         NettyHttpRequest request = new NettyHttpRequest(httpRequest, writeCapturingChannel);
 
-        NettyHttpChannel channel = new NettyHttpChannel(httpServerTransport, request, null, randomBoolean());
+        NettyHttpChannel channel = new NettyHttpChannel(httpServerTransport, request, null, randomBoolean(), Optional.empty());
         channel.sendResponse(new TestReponse());
 
         // inspect what was written

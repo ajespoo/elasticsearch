@@ -36,6 +36,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
@@ -1139,5 +1140,17 @@ public class Strings {
             sb.append(s);
             return sb.toString();
         }
+    }
+
+    /** To lower case for English.  Avoid having to specify the Locale every time.
+     *
+     * @param s The string to lower case
+     * @return The lower cased string
+     */
+    public static String enLowerCase(final String s) {
+        if (s == null) {
+            throw new NullPointerException("string cannot be null");
+        }
+        return s.toLowerCase(Locale.ENGLISH);
     }
 }

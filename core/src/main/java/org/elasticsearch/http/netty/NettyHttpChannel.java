@@ -19,7 +19,6 @@
 
 package org.elasticsearch.http.netty;
 
-import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.io.stream.BytesStreamOutput;
 import org.elasticsearch.common.io.stream.ReleasableBytesStreamOutput;
@@ -30,7 +29,6 @@ import org.elasticsearch.http.netty.pipelining.OrderedDownstreamChannelEvent;
 import org.elasticsearch.http.netty.pipelining.OrderedUpstreamMessageEvent;
 import org.elasticsearch.rest.RestResponse;
 import org.elasticsearch.rest.RestStatus;
-import org.elasticsearch.rest.support.RestUtils;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.channel.Channel;
 import org.jboss.netty.channel.ChannelFuture;
@@ -38,30 +36,14 @@ import org.jboss.netty.channel.ChannelFutureListener;
 import org.jboss.netty.handler.codec.http.Cookie;
 import org.jboss.netty.handler.codec.http.CookieDecoder;
 import org.jboss.netty.handler.codec.http.CookieEncoder;
-import org.jboss.netty.handler.codec.http.DefaultHttpResponse;
 import org.jboss.netty.handler.codec.http.HttpHeaders;
-import org.jboss.netty.handler.codec.http.HttpMethod;
+import org.jboss.netty.handler.codec.http.HttpResponse;
 import org.jboss.netty.handler.codec.http.HttpResponseStatus;
-import org.jboss.netty.handler.codec.http.HttpVersion;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
-import java.util.regex.Pattern;
-
-import static org.elasticsearch.http.netty.NettyHttpServerTransport.SETTING_CORS_ALLOW_CREDENTIALS;
-import static org.elasticsearch.http.netty.NettyHttpServerTransport.SETTING_CORS_ALLOW_HEADERS;
-import static org.elasticsearch.http.netty.NettyHttpServerTransport.SETTING_CORS_ALLOW_METHODS;
-import static org.elasticsearch.http.netty.NettyHttpServerTransport.SETTING_CORS_ALLOW_ORIGIN;
-import static org.elasticsearch.http.netty.NettyHttpServerTransport.SETTING_CORS_ENABLED;
-import static org.elasticsearch.http.netty.NettyHttpServerTransport.SETTING_CORS_MAX_AGE;
-import static org.jboss.netty.handler.codec.http.HttpHeaders.Names.ACCESS_CONTROL_ALLOW_CREDENTIALS;
-import static org.jboss.netty.handler.codec.http.HttpHeaders.Names.ACCESS_CONTROL_ALLOW_HEADERS;
-import static org.jboss.netty.handler.codec.http.HttpHeaders.Names.ACCESS_CONTROL_ALLOW_METHODS;
-import static org.jboss.netty.handler.codec.http.HttpHeaders.Names.ACCESS_CONTROL_ALLOW_ORIGIN;
-import static org.jboss.netty.handler.codec.http.HttpHeaders.Names.ACCESS_CONTROL_MAX_AGE;
-import static org.jboss.netty.handler.codec.http.HttpHeaders.Names.ORIGIN;
-import static org.jboss.netty.handler.codec.http.HttpHeaders.Names.USER_AGENT;
 
 /**
  *
@@ -71,19 +53,22 @@ public class NettyHttpChannel extends HttpChannel {
     private final NettyHttpServerTransport transport;
     private final Channel channel;
     private final org.jboss.netty.handler.codec.http.HttpRequest nettyRequest;
+    private final Optional<HttpMessageEvent> event;
     private OrderedUpstreamMessageEvent orderedUpstreamMessageEvent = null;
-    private Pattern corsPattern;
 
-    public NettyHttpChannel(NettyHttpServerTransport transport, NettyHttpRequest request, Pattern corsPattern, boolean detailedErrorsEnabled) {
+    public NettyHttpChannel(NettyHttpServerTransport transport, NettyHttpRequest request,
+                            boolean detailedErrorsEnabled, Optional<HttpMessageEvent> event) {
         super(request, detailedErrorsEnabled);
         this.transport = transport;
         this.channel = request.getChannel();
         this.nettyRequest = request.request();
-        this.corsPattern = corsPattern;
+        this.event = event;
     }
 
-    public NettyHttpChannel(NettyHttpServerTransport transport, NettyHttpRequest request, Pattern corsPattern, OrderedUpstreamMessageEvent orderedUpstreamMessageEvent, boolean detailedErrorsEnabled) {
-        this(transport, request, corsPattern, detailedErrorsEnabled);
+    public NettyHttpChannel(NettyHttpServerTransport transport, NettyHttpRequest request,
+                            OrderedUpstreamMessageEvent orderedUpstreamMessageEvent, boolean detailedErrorsEnabled,
+                            Optional<HttpMessageEvent> event) {
+        this(transport, request, detailedErrorsEnabled, event);
         this.orderedUpstreamMessageEvent = orderedUpstreamMessageEvent;
     }
 
@@ -95,48 +80,9 @@ public class NettyHttpChannel extends HttpChannel {
 
     @Override
     public void sendResponse(RestResponse response) {
-        // Decide whether to close the connection or not.
-        boolean http10 = nettyRequest.getProtocolVersion().equals(HttpVersion.HTTP_1_0);
-        boolean close =
-                HttpHeaders.Values.CLOSE.equalsIgnoreCase(nettyRequest.headers().get(HttpHeaders.Names.CONNECTION)) ||
-                        (http10 && !HttpHeaders.Values.KEEP_ALIVE.equalsIgnoreCase(nettyRequest.headers().get(HttpHeaders.Names.CONNECTION)));
-
-        // Build the response object.
-        HttpResponseStatus status = getStatus(response.status());
-        org.jboss.netty.handler.codec.http.HttpResponse resp;
-        if (http10) {
-            resp = new DefaultHttpResponse(HttpVersion.HTTP_1_0, status);
-            if (!close) {
-                resp.headers().add(HttpHeaders.Names.CONNECTION, "Keep-Alive");
-            }
-        } else {
-            resp = new DefaultHttpResponse(HttpVersion.HTTP_1_1, status);
-        }
-        if (RestUtils.isBrowser(nettyRequest.headers().get(USER_AGENT))) {
-            if (transport.settings().getAsBoolean(SETTING_CORS_ENABLED, false)) {
-                String originHeader = request.header(ORIGIN);
-                if (!Strings.isNullOrEmpty(originHeader)) {
-                    if (corsPattern == null) {
-                        String allowedOrigins = transport.settings().get(SETTING_CORS_ALLOW_ORIGIN, null);
-                        if (!Strings.isNullOrEmpty(allowedOrigins)) {
-                            resp.headers().add(ACCESS_CONTROL_ALLOW_ORIGIN, allowedOrigins);
-                        }
-                    } else {
-                        resp.headers().add(ACCESS_CONTROL_ALLOW_ORIGIN, corsPattern.matcher(originHeader).matches() ? originHeader : "null");
-                    }
-                }
-                if (nettyRequest.getMethod() == HttpMethod.OPTIONS) {
-                    // Allow Ajax requests based on the CORS "preflight" request
-                    resp.headers().add(ACCESS_CONTROL_MAX_AGE, transport.settings().getAsInt(SETTING_CORS_MAX_AGE, 1728000));
-                    resp.headers().add(ACCESS_CONTROL_ALLOW_METHODS, transport.settings().get(SETTING_CORS_ALLOW_METHODS, "OPTIONS, HEAD, GET, POST, PUT, DELETE"));
-                    resp.headers().add(ACCESS_CONTROL_ALLOW_HEADERS, transport.settings().get(SETTING_CORS_ALLOW_HEADERS, "X-Requested-With, Content-Type, Content-Length"));
-                }
-
-                if (transport.settings().getAsBoolean(SETTING_CORS_ALLOW_CREDENTIALS, false)) {
-                    resp.headers().add(ACCESS_CONTROL_ALLOW_CREDENTIALS, "true");
-                }
-            }
-        }
+        HttpResponse resp = event.map(HttpMessageEvent::getHttpResponse)
+                                 .orElse(HttpUtils.newResponse(nettyRequest));
+        resp.setStatus(getStatus(response.status()));
 
         String opaque = nettyRequest.headers().get("X-Opaque-Id");
         if (opaque != null) {
@@ -201,7 +147,7 @@ public class NettyHttpChannel extends HttpChannel {
                 addedReleaseListener = true;
             }
 
-            if (close) {
+            if (HttpUtils.isCloseConnection(nettyRequest)) {
                 future.addListener(ChannelFutureListener.CLOSE);
             }
 

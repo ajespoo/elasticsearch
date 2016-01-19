@@ -20,6 +20,7 @@
 package org.elasticsearch.http.netty;
 
 import org.elasticsearch.common.Booleans;
+import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.SuppressForbidden;
 import org.elasticsearch.common.component.AbstractLifecycleComponent;
 import org.elasticsearch.common.inject.Inject;
@@ -45,8 +46,12 @@ import org.elasticsearch.http.HttpRequest;
 import org.elasticsearch.http.HttpServerAdapter;
 import org.elasticsearch.http.HttpServerTransport;
 import org.elasticsearch.http.HttpStats;
+import org.elasticsearch.http.netty.cors.CorsConfig;
+import org.elasticsearch.http.netty.cors.CorsConfigBuilder;
+import org.elasticsearch.http.netty.cors.CorsHandler;
 import org.elasticsearch.http.netty.pipelining.HttpPipeliningHandler;
 import org.elasticsearch.monitor.jvm.JvmInfo;
+import org.elasticsearch.rest.support.RestUtils;
 import org.elasticsearch.transport.BindTransportException;
 import org.jboss.netty.bootstrap.ServerBootstrap;
 import org.jboss.netty.channel.AdaptiveReceiveBufferSizePredictorFactory;
@@ -62,6 +67,7 @@ import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
 import org.jboss.netty.channel.socket.oio.OioServerSocketChannelFactory;
 import org.jboss.netty.handler.codec.http.HttpChunkAggregator;
 import org.jboss.netty.handler.codec.http.HttpContentCompressor;
+import org.jboss.netty.handler.codec.http.HttpMethod;
 import org.jboss.netty.handler.codec.http.HttpRequestDecoder;
 import org.jboss.netty.handler.timeout.ReadTimeoutException;
 
@@ -71,8 +77,10 @@ import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 
 import static org.elasticsearch.common.network.NetworkService.TcpSettings.TCP_BLOCKING;
 import static org.elasticsearch.common.network.NetworkService.TcpSettings.TCP_BLOCKING_SERVER;
@@ -84,6 +92,7 @@ import static org.elasticsearch.common.network.NetworkService.TcpSettings.TCP_RE
 import static org.elasticsearch.common.network.NetworkService.TcpSettings.TCP_REUSE_ADDRESS;
 import static org.elasticsearch.common.network.NetworkService.TcpSettings.TCP_SEND_BUFFER_SIZE;
 import static org.elasticsearch.common.util.concurrent.EsExecutors.daemonThreadFactory;
+import static org.elasticsearch.http.netty.cors.CorsHandler.ANY_ORIGIN;
 
 /**
  *
@@ -421,10 +430,50 @@ public class NettyHttpServerTransport extends AbstractLifecycleComponent<HttpSer
 
         protected final NettyHttpServerTransport transport;
         protected final HttpRequestHandler requestHandler;
+        private final CorsConfig corsConfig;
 
         public HttpChannelPipelineFactory(NettyHttpServerTransport transport, boolean detailedErrorsEnabled) {
             this.transport = transport;
             this.requestHandler = new HttpRequestHandler(transport, detailedErrorsEnabled);
+            this.corsConfig = buildCorsConfig();
+        }
+
+        private CorsConfig buildCorsConfig() {
+            Settings settings = transport.settings();
+            if (!settings.getAsBoolean(SETTING_CORS_ENABLED, false)) {
+                return CorsConfigBuilder.forAnyOrigin().disable().build();
+            }
+            String origin = settings.get(SETTING_CORS_ALLOW_ORIGIN);
+            if (Strings.isNullOrEmpty(origin)) {
+                throw new IllegalArgumentException("Setting " + SETTING_CORS_ENABLED +
+                                                       " requires also setting " + SETTING_CORS_ALLOW_ORIGIN);
+            }
+            final CorsConfigBuilder builder;
+            if (origin.equals(ANY_ORIGIN)) {
+                builder = CorsConfigBuilder.forAnyOrigin();
+            } else {
+                Pattern p = RestUtils.checkCorsSettingForRegex(origin);
+                if (p == null) {
+                    builder = CorsConfigBuilder.forOrigins(RestUtils.corsSettingAsArray(origin));
+                } else {
+                    builder = CorsConfigBuilder.forPattern(p);
+                }
+            }
+            if (settings.getAsBoolean(SETTING_CORS_ALLOW_CREDENTIALS, false)) {
+                builder.allowCredentials();
+            }
+            String[] strMethods = settings.getAsArray(SETTING_CORS_ALLOW_METHODS, new String[0]);
+            HttpMethod[] methods = Arrays.asList(strMethods)
+                                         .stream()
+                                         .map(m -> HttpUtils.toHttpMethod(m))
+                                         .filter(Optional::isPresent)
+                                         .map(Optional::get)
+                                         .toArray(size -> new HttpMethod[size]);
+            return builder.allowedRequestMethods(methods)
+                          .maxAge(settings.getAsLong(SETTING_CORS_MAX_AGE, 1728000L))
+                          .allowedRequestHeaders(settings.getAsArray(SETTING_CORS_ALLOW_HEADERS, new String[0]))
+                          .shortCircuit()
+                          .build();
         }
 
         @Override
@@ -453,6 +502,9 @@ public class NettyHttpServerTransport extends AbstractLifecycleComponent<HttpSer
                 httpChunkAggregator.setMaxCumulationBufferComponents(transport.maxCompositeBufferComponents);
             }
             pipeline.addLast("aggregator", httpChunkAggregator);
+            if (transport.settings().getAsBoolean(SETTING_CORS_ENABLED, false)) {
+                pipeline.addLast("cors", new CorsHandler(corsConfig));
+            }
             pipeline.addLast("encoder", new ESHttpResponseEncoder());
             if (transport.compression) {
                 pipeline.addLast("encoder_compress", new HttpContentCompressor(transport.compressionLevel));

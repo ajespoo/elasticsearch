@@ -60,4 +60,15 @@ public class StringsTests extends ESTestCase {
         assertEquals("o", Strings.cleanTruncate("o\uD83D\uDEAB", 1));
         assertEquals("", Strings.cleanTruncate("foo", 0));
     }
+
+    public void testEnLowerCase() {
+        assertEquals("foo", Strings.enLowerCase("foo"));
+        assertEquals("foo", Strings.enLowerCase("FOO"));
+        assertEquals("foo", Strings.enLowerCase("Foo"));
+        try {
+            assertEquals(null, Strings.enLowerCase(null));
+            fail("Should not be able to lower case a null string.");
+        } catch (NullPointerException npe) {
+        }
+    }
 }
