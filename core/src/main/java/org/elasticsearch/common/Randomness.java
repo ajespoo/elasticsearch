@@ -48,15 +48,15 @@ public final class Randomness {
     private static final Method getRandomMethod;
 
     static {
-        Method maybeCurrentMethod;
-        Method maybeGetRandomMethod;
-        try {
-            Class<?> clazz = Class.forName("com.carrotsearch.randomizedtesting.RandomizedContext");
-            maybeCurrentMethod = clazz.getMethod("current");
-            maybeGetRandomMethod = clazz.getMethod("getRandom");
-        } catch (Throwable t) {
-            maybeCurrentMethod = null;
-            maybeGetRandomMethod = null;
+        Method maybeCurrentMethod = null;
+        Method maybeGetRandomMethod = null;
+        if (System.getProperty("disable_randomness", "false").equals("false")) {
+            try {
+                Class<?> clazz = Class.forName("com.carrotsearch.randomizedtesting.RandomizedContext");
+                maybeCurrentMethod = clazz.getMethod("current");
+                maybeGetRandomMethod = clazz.getMethod("getRandom");
+            } catch (Throwable t) {
+            }
         }
         currentMethod = maybeCurrentMethod;
         getRandomMethod = maybeGetRandomMethod;
